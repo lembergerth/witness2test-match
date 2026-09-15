@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: 2026 Dirk Beyer <https://www.sosy-lab.org>
+# SPDX-License-Identifier: Apache-2.0
+
+- entry_type: "violation_sequence"
+  metadata:
+    format_version: "2.0"
+    uuid: "00000000-0000-0000-0000-0000000000aa"
+    creation_time: "2026-01-01T00:00:00Z"
+    producer: { name: "fixed-input-fixture", version: "0" }
+    task:
+      input_files: [ "program.c" ]
+      input_file_hashes: { "program.c": "deadbeef" }
+      specification: "G ! call(reach_error())"
+      data_model: "ILP32"
+      language: "C"
+  content:
+  - segment:
+    - waypoint:
+        type: "function_return"
+        action: "follow"
+        constraint: { value: "\\result == 42", format: "acsl_expression" }
+        location: { file_name: "program.c", line: 8, column: 33 }
+  - segment:
+    - waypoint:
+        type: "target"
+        action: "follow"
+        location: { file_name: "program.c", line: 10, column: 5 }

@@ -1,0 +1,102 @@
+// This file is part of witness2test,
+// a tool to turn SV-COMP violation witnesses (format v2) into executable tests.
+// https://gitlab.com/sosy-lab/software/witness2test
+//
+// SPDX-FileCopyrightText: 2026 Dirk Beyer <https://www.sosy-lab.org>
+//
+// SPDX-License-Identifier: Apache-2.0
+
+= Witness2Test
+
+Witness2Test turns SV-COMP violation witnesses (format v2) into executable tests
+that, when compiled and run, reproduce the violation described by the witness.
+
+== Description
+
+Given a C program and a YAML violation witness in
+https://sosy-lab.gitlab.io/benchmarking/sv-witnesses/yaml/violation-witnesses.html[format version 2],
+Witness2Test extracts the sequence of nondeterministic input values implied by
+the witness's `function_return` waypoints and instruments the program so that
+each matched `__VERIFIER_nondet_X()` call site is replaced by a location-stamped
+injection function `__VERIFIER_nondet_value_injection_<line>_<col>()` that returns
+the witness-supplied values in document order. The instrumented program is
+compiled against a self-contained C harness and executed; reaching the witnessed
+violation point is observable as a process exit with a known status code.
+
+The approach mirrors the
+https://gitlab.com/sosy-lab/software/test-to-witness[test-to-witness] tool in the
+opposite direction. See the
+https://www.sosy-lab.org/research/pub/2018-TAP.Tests_from_Witnesses_Execution-Based_Validation_of_Verification_Results.pdf[Tests from Witnesses (TAP 2018)]
+and
+https://www.sosy-lab.org/research/pub/2026-FASE.Testing_in_Formal_Verification_via_Witness_Generation.pdf[Testing in Formal Verification via Witness Generation (FASE 2026)]
+papers for background.
+
+== Dependencies and Installation
+
+=== System Requirements
+
+* Go 1.24.3 or later
+* GCC
+
+=== Building
+
+[source,bash]
+----
+make deps
+make build
+# Creates binary 'bin/witness2test'
+----
+
+== Use
+
+[source,bash]
+----
+bin/witness2test \
+    --witness path/to/witness.yml \
+    --program path/to/program.c \
+    --output  output/
+----
+
+The instrumented program is always written to `output/instrumented_program.c`
+and named in the final verdict line.
+
+=== Verdicts
+
+* `Confirmed` — the compiled instrumented program reached the witnessed
+  violation point.
+* `NotConfirmed` — the program completed without reaching the violation point.
+* `WitnessInconsistent` — a witnessed nondet call site was reached more times
+  than the witness supplied values for; the witness is inconsistent with the
+  program.
+* `WitnessUnsupported` — the witness contains no `function_return` waypoints we
+  can interpret (typical of witnesses that carry values via `assumption` only).
+* `Timeout` — execution exceeded `--time-per-run`.
+
+=== Command Line Options
+
+Run `witness2test --help` to see all available options.
+
+== Scope and limitations (v1)
+
+* Only `function_return` waypoints with constraints of the form
+  `\result == <literal>` are interpreted. `assumption` waypoints are not.
+* The column field in the witness is assumed to mark the closing parenthesis of
+  the call expression (the convention used by Symbiotic). Witnesses produced
+  with a different column convention may not match.
+* Only single-line `__VERIFIER_nondet_X()` calls are recognized.
+* Witness `constraint.value` is restricted to integer / float / character /
+  boolean literals; any other content is rejected at parse time as a security
+  measure (see CLAUDE.md).
+
+== Development and Testing
+
+[source,bash]
+----
+make test
+make lint
+make integration-test
+----
+
+== License
+
+This project is licensed under the Apache License, Version 2.0.

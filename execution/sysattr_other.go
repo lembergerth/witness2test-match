@@ -1,0 +1,17 @@
+// This file is part of witness2test,
+// a tool to turn SV-COMP violation witnesses (format v2) into executable tests.
+// https://gitlab.com/sosy-lab/software/witness2test
+//
+// SPDX-FileCopyrightText: 2026 Dirk Beyer <https://www.sosy-lab.org>
+//
+// SPDX-License-Identifier: Apache-2.0
+
+//go:build !unix
+
+package execution
+
+import "syscall"
+
+func sysProcAttr() *syscall.SysProcAttr {
+	return nil
+}

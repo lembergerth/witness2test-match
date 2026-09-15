@@ -1,0 +1,40 @@
+# This file is part of witness2test,
+# a tool to turn SV-COMP violation witnesses (format v2) into executable tests.
+# https://gitlab.com/sosy-lab/software/witness2test
+#
+# SPDX-FileCopyrightText: 2026 Dirk Beyer <https://www.sosy-lab.org>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+test:
+  stage: test
+  image: ${CI_REGISTRY_IMAGE}/ci:latest
+  script:
+    - make test
+
+integration-test:
+  stage: test
+  image: ${CI_REGISTRY_IMAGE}/ci:latest
+  script:
+    - make integration-test
+  artifacts:
+    paths:
+      - output/
+    untracked: false
+    when: on_failure
+    expire_in: "7 days"
+
+reuse:
+  stage: test
+  image:
+    name: fsfe/reuse:5
+    entrypoint: [""]
+  script: reuse lint
+  cache: []
+  needs: []
+
+lint:
+  stage: test
+  image: docker/golangci-lint:1.64.8-go1.24.3
+  script:
+    - make lint

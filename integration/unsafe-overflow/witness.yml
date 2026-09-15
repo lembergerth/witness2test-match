@@ -1,0 +1,40 @@
+# This file is part of witness2test.
+# SPDX-FileCopyrightText: 2026 Dirk Beyer <https://www.sosy-lab.org>
+# SPDX-License-Identifier: Apache-2.0
+#
+# Same source as unsafe-program-example, but the witness is truncated to
+# provide only one value for the loop's nondet call. With n=2, the loop's
+# second call exhausts the values array and the generated injection function
+# exits with exitcodes.WitnessInconsistent. Expected verdict:
+# WitnessInconsistent.
+
+- content:
+  - segment:
+    - waypoint:
+        action: follow
+        constraint: { format: acsl_expression, value: "\\result == 2" }
+        location: { column: 45, file_name: unsafe-program-example.c, line: 10 }
+        type: function_return
+  - segment:
+    - waypoint:
+        action: follow
+        constraint: { format: acsl_expression, value: "\\result == 1" }
+        location: { column: 33, file_name: unsafe-program-example.c, line: 18 }
+        type: function_return
+  - segment:
+    - waypoint:
+        action: follow
+        location: { column: 5, file_name: unsafe-program-example.c, line: 23 }
+        type: target
+  entry_type: violation_sequence
+  metadata:
+    creation_time: '2026-01-01T00:00:00Z'
+    format_version: '2.0'
+    producer: { name: test-fixture, version: '0' }
+    task:
+      data_model: LP64
+      input_file_hashes: { unsafe-program-example.c: deadbeef }
+      input_files: [ unsafe-program-example.c ]
+      language: C
+      specification: "G ! call(reach_error())"
+    uuid: 00000000-0000-0000-0000-000000000021

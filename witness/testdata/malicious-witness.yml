@@ -1,0 +1,39 @@
+# This file is part of witness2test,
+# a tool to turn SV-COMP violation witnesses (format v2) into executable tests.
+# https://gitlab.com/sosy-lab/software/witness2test
+#
+# SPDX-FileCopyrightText: 2026 Dirk Beyer <https://www.sosy-lab.org>
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Hostile fixture: the constraint value would inject arbitrary C if emitted
+# verbatim into a generated array initializer. Parse must reject it.
+
+- entry_type: "violation_sequence"
+  metadata:
+    format_version: "2.0"
+    uuid: "00000000-0000-0000-0000-000000000001"
+    creation_time: "2026-01-01T00:00:00Z"
+    producer:
+      name: "test-fixture"
+      version: "0"
+    task:
+      input_files:
+      - "program.c"
+      input_file_hashes:
+        "program.c": "deadbeef"
+      specification: "G ! call(reach_error())"
+      data_model: "ILP32"
+      language: "C"
+  content:
+  - segment:
+    - waypoint:
+        type: "function_return"
+        action: "follow"
+        constraint:
+          value: "\\result == 0 }; void __attribute__((constructor)) pwn(void){ } unsigned char x[] = { 0"
+          format: "c_expression"
+        location:
+          file_name: "program.c"
+          line: 10
+          column: 45

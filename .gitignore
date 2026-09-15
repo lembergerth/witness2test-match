@@ -1,6 +1,11 @@
-# If you prefer the allow list template instead of the deny list, see community template:
-# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
+# This file is part of witness2test,
+# a tool to turn SV-COMP violation witnesses (format v2) into executable tests.
+# https://gitlab.com/sosy-lab/software/witness2test
 #
+# SPDX-FileCopyrightText: 2026 Dirk Beyer <https://www.sosy-lab.org>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Binaries for programs and plugins
 *.exe
 *.exe~
@@ -8,25 +13,23 @@
 *.so
 *.dylib
 
+bin/
+witness2test
+
 # Test binary, built with `go test -c`
 *.test
 
-# Code coverage profiles and other test artifacts
+# Coverage profiles
 *.out
-coverage.*
-*.coverprofile
-profile.cov
-
-# Dependency directories (remove the comment below to include it)
-# vendor/
 
 # Go workspace file
 go.work
-go.work.sum
 
-# env file
-.env
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
 
-# Editor/IDE
-# .idea/
-# .vscode/
+# Output directory, often created during manual testing
+output/

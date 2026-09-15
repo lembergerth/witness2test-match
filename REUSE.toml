@@ -1,0 +1,24 @@
+# This file is part of witness2test,
+# a tool to turn SV-COMP violation witnesses (format v2) into executable tests.
+# https://gitlab.com/sosy-lab/software/witness2test
+#
+# SPDX-FileCopyrightText: 2026 Dirk Beyer <https://www.sosy-lab.org>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+version = 1
+SPDX-PackageName = "witness2test"
+SPDX-PackageSupplier = "Dirk Beyer <https://www.sosy-lab.org>"
+SPDX-PackageDownloadLocation = "https://gitlab.com/sosy-lab/software/witness2test"
+
+[[annotations]]
+path = "integration/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 SV-COMP Community"
+SPDX-License-Identifier = "CC-BY-4.0"
+
+[[annotations]]
+path = "testdata/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Dirk Beyer <https://www.sosy-lab.org>"
+SPDX-License-Identifier = "Apache-2.0"

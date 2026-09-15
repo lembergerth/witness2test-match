@@ -1,0 +1,34 @@
+/* Minimal harness for witness2test instrumented programs.
+ *
+ * Provides:
+ *   - reach_error(): exits with exitcodes.ViolationReached (213) so
+ *     execution/ can detect that the witnessed violation point was hit.
+ *   - Weak default __VERIFIER_nondet_*() implementations returning 0,
+ *     so unwitnessed call sites still link.
+ *
+ * Definitions are __attribute__((weak)) so a program that provides its own
+ * version (typical SV-COMP harness) silently wins at link time.
+ */
+
+extern void _Exit(int);
+
+__attribute__((weak)) void reach_error(void) { _Exit(213); }
+
+__attribute__((weak)) int __VERIFIER_nondet_int(void) { return 0; }
+__attribute__((weak)) unsigned int __VERIFIER_nondet_uint(void) { return 0; }
+__attribute__((weak)) unsigned int __VERIFIER_nondet_unsigned(void) { return 0; }
+__attribute__((weak)) short __VERIFIER_nondet_short(void) { return 0; }
+__attribute__((weak)) unsigned short __VERIFIER_nondet_ushort(void) { return 0; }
+__attribute__((weak)) long __VERIFIER_nondet_long(void) { return 0; }
+__attribute__((weak)) unsigned long __VERIFIER_nondet_ulong(void) { return 0; }
+__attribute__((weak)) long long __VERIFIER_nondet_longlong(void) { return 0; }
+__attribute__((weak)) unsigned long long __VERIFIER_nondet_ulonglong(void) { return 0; }
+__attribute__((weak)) char __VERIFIER_nondet_char(void) { return 0; }
+__attribute__((weak)) unsigned char __VERIFIER_nondet_uchar(void) { return 0; }
+__attribute__((weak)) _Bool __VERIFIER_nondet_bool(void) { return 0; }
+__attribute__((weak)) float __VERIFIER_nondet_float(void) { return 0.0f; }
+__attribute__((weak)) double __VERIFIER_nondet_double(void) { return 0.0; }
+__attribute__((weak)) void *__VERIFIER_nondet_pointer(void) { return (void *)0; }
+
+/* SV-COMP convenience: __VERIFIER_assert in case the program uses it. */
+__attribute__((weak)) void __VERIFIER_assert(int cond) { if (!cond) reach_error(); }

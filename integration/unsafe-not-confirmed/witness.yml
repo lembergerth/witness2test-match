@@ -1,0 +1,45 @@
+# This file is part of witness2test.
+# SPDX-FileCopyrightText: 2026 Dirk Beyer <https://www.sosy-lab.org>
+# SPDX-License-Identifier: Apache-2.0
+#
+# Same source as unsafe-program-example, but with the loop's second value
+# mutated from 255 to 0. With n=2, loop returns v=1 then v=0; s=1, then s<v
+# is 1<0 (false) and s>65025 is false; main returns 0 without reaching
+# reach_error. Expected verdict: NotConfirmed.
+
+- content:
+  - segment:
+    - waypoint:
+        action: follow
+        constraint: { format: acsl_expression, value: "\\result == 2" }
+        location: { column: 45, file_name: unsafe-program-example.c, line: 10 }
+        type: function_return
+  - segment:
+    - waypoint:
+        action: follow
+        constraint: { format: acsl_expression, value: "\\result == 1" }
+        location: { column: 33, file_name: unsafe-program-example.c, line: 18 }
+        type: function_return
+  - segment:
+    - waypoint:
+        action: follow
+        constraint: { format: acsl_expression, value: "\\result == 0" }
+        location: { column: 33, file_name: unsafe-program-example.c, line: 18 }
+        type: function_return
+  - segment:
+    - waypoint:
+        action: follow
+        location: { column: 5, file_name: unsafe-program-example.c, line: 23 }
+        type: target
+  entry_type: violation_sequence
+  metadata:
+    creation_time: '2026-01-01T00:00:00Z'
+    format_version: '2.0'
+    producer: { name: test-fixture, version: '0' }
+    task:
+      data_model: LP64
+      input_file_hashes: { unsafe-program-example.c: deadbeef }
+      input_files: [ unsafe-program-example.c ]
+      language: C
+      specification: "G ! call(reach_error())"
+    uuid: 00000000-0000-0000-0000-000000000020
