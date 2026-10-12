@@ -6,16 +6,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-= Witness2Test
+= witness2test-match
 
-Witness2Test turns SV-COMP violation witnesses (format v2) into executable tests
+witness2test-match turns SV-COMP violation witnesses (format v2) into executable tests
 that, when compiled and run, reproduce the violation described by the witness.
 
 == Description
 
 Given a C program and a YAML violation witness in
 https://sosy-lab.gitlab.io/benchmarking/sv-witnesses/yaml/violation-witnesses.html[format version 2],
-Witness2Test extracts the sequence of nondeterministic input values implied by
+witness2test-match extracts the sequence of nondeterministic input values implied by
 the witness's `function_return` waypoints and instruments the program so that
 each matched `__VERIFIER_nondet_X()` call site is replaced by a location-stamped
 injection function `__VERIFIER_nondet_value_injection_<line>_<col>()` that returns
