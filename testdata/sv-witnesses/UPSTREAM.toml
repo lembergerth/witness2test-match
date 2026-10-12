@@ -1,0 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Thomas Lemberger <thomaslemberger.com>
+# SPDX-License-Identifier: Apache-2.0
+
+repository = "https://gitlab.com/sosy-lab/benchmarking/sv-witnesses"
+revision = "801a61fb235d217abc3ac8f3458d9291bb157ed5"
+path = "examples/"

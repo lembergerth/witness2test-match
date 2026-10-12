@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+
+<!--
+This file is part of sv-witnesses repository: https://github.com/sosy-lab/sv-witnesses
+
+SPDX-FileCopyrightText: 2023 Dirk Beyer <https://www.sosy-lab.org>
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+ <key attr.name="isViolationNode" attr.type="boolean" for="node" id="violation">
+  <default>false</default>
+ </key>
+ <key attr.name="isEntryNode" attr.type="boolean" for="node" id="entry">
+  <default>false</default>
+ </key>
+ <key attr.name="isSinkNode" attr.type="boolean" for="node" id="sink">
+  <default>false</default>
+ </key>
+ <key attr.name="enterLoopHead" attr.type="boolean" for="edge" id="enterLoopHead">
+  <default>false</default>
+ </key>
+ <key attr.name="violatedProperty" attr.type="string" for="node" id="violatedProperty"/>
+ <key attr.name="sourcecodeLanguage" attr.type="string" for="graph" id="sourcecodelang"/>
+ <key attr.name="programFile" attr.type="string" for="graph" id="programfile"/>
+ <key attr.name="programHash" attr.type="string" for="graph" id="programhash"/>
+ <key attr.name="specification" attr.type="string" for="graph" id="specification"/>
+ <key attr.name="architecture" attr.type="string" for="graph" id="architecture"/>
+ <key attr.name="producer" attr.type="string" for="graph" id="producer"/>
+ <key attr.name="creationTime" attr.type="string" for="graph" id="creationtime"/>
+ <key attr.name="startline" attr.type="int" for="edge" id="startline"/>
+ <key attr.name="endline" attr.type="int" for="edge" id="endline"/>
+ <key attr.name="originFileName" attr.type="string" for="edge" id="originfile">
+  <default>./tmp-unsafe.c</default>
+ </key>
+ <key attr.name="control" attr.type="string" for="edge" id="control"/>
+ <key attr.name="assumption" attr.type="string" for="edge" id="assumption"/>
+ <key attr.name="assumption.scope" attr.type="string" for="edge" id="assumption.scope"/>
+ <key attr.name="enterFunction" attr.type="string" for="edge" id="enterFunction"/>
+ <key attr.name="witness-type" attr.type="string" for="graph" id="witness-type"/>
+ <key attr.name="inputWitnessHash" attr.type="string" for="graph" id="inputwitnesshash"/>
+ <graph edgedefault="directed">
+  <data key="witness-type">violation_witness</data>
+  <data key="sourcecodelang">C</data>
+  <data key="producer">CPAchecker 2.2.1-svn / svcomp23</data>
+  <data key="specification">CHECK( init(main()), LTL(G ! call(reach_error())) )</data>
+  <data key="programfile">./tmp-unsafe.c</data>
+  <data key="programhash">788d7646eac82f609530b21c31663b77db1405e2b5e4d86a794d2b2e4367fb8a</data>
+  <data key="architecture">32bit</data>
+  <data key="creationtime">2023-09-28T14:42:30+02:00</data>
+  <node id="A0">
+   <data key="entry">true</data>
+  </node>
+  <node id="A2_3_1"/>
+  <edge source="A0" target="A2_3_1">
+   <data key="startline">9</data>
+   <data key="endline">9</data>
+   <data key="enterFunction">main</data>
+  </edge>
+  <node id="sink">
+   <data key="sink">true</data>
+  </node>
+  <edge source="A2_3_1" target="sink">
+   <data key="startline">11</data>
+   <data key="endline">11</data>
+   <data key="control">condition-true</data>
+  </edge>
+  <node id="A4"/>
+  <edge source="A2_3_1" target="A4">
+   <data key="startline">11</data>
+   <data key="endline">11</data>
+   <data key="control">condition-false</data>
+  </edge>
+  <node id="A6_0_2"/>
+  <edge source="A4" target="A6_0_2">
+   <data key="startline">14</data>
+   <data key="endline">14</data>
+   <data key="assumption">v == (0U);</data>
+   <data key="assumption.scope">main</data>
+  </edge>
+  <node id="A6"/>
+  <edge source="A6_0_2" target="A6">
+   <data key="startline">15</data>
+   <data key="endline">15</data>
+   <data key="assumption">s == (0U);</data>
+   <data key="assumption.scope">main</data>
+  </edge>
+  <node id="A8"/>
+  <edge source="A6" target="A8">
+   <data key="startline">17</data>
+   <data key="endline">17</data>
+   <data key="control">condition-true</data>
+  </edge>
+  <edge source="A6" target="sink">
+   <data key="startline">17</data>
+   <data key="endline">17</data>
+   <data key="control">condition-false</data>
+  </edge>
+  <node id="A21">
+   <data key="violation">true</data>
+   <data key="violatedProperty">unreach-call: reach_error(); called in line 17</data>
+  </node>
+  <edge source="A8" target="A21">
+   <data key="startline">22</data>
+   <data key="endline">22</data>
+   <data key="control">condition-true</data>
+  </edge>
+  <edge source="A8" target="sink">
+   <data key="startline">22</data>
+   <data key="endline">22</data>
+   <data key="control">condition-false</data>
+  </edge>
+ </graph>
+</graphml>

@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+
+<!--
+This file is part of sv-witnesses repository: https://github.com/sosy-lab/sv-witnesses
+
+SPDX-FileCopyrightText: 2023 Dirk Beyer <https://www.sosy-lab.org>
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+ <key attr.name="invariant" attr.type="string" for="node" id="invariant"/>
+ <key attr.name="invariant.scope" attr.type="string" for="node" id="invariant.scope"/>
+ <key attr.name="isEntryNode" attr.type="boolean" for="node" id="entry">
+  <default>false</default>
+ </key>
+ <key attr.name="enterLoopHead" attr.type="boolean" for="edge" id="enterLoopHead">
+  <default>false</default>
+ </key>
+ <key attr.name="sourcecodeLanguage" attr.type="string" for="graph" id="sourcecodelang"/>
+ <key attr.name="programFile" attr.type="string" for="graph" id="programfile"/>
+ <key attr.name="programHash" attr.type="string" for="graph" id="programhash"/>
+ <key attr.name="specification" attr.type="string" for="graph" id="specification"/>
+ <key attr.name="architecture" attr.type="string" for="graph" id="architecture"/>
+ <key attr.name="producer" attr.type="string" for="graph" id="producer"/>
+ <key attr.name="creationTime" attr.type="string" for="graph" id="creationtime"/>
+ <key attr.name="startline" attr.type="int" for="edge" id="startline"/>
+ <key attr.name="endline" attr.type="int" for="edge" id="endline"/>
+ <key attr.name="originFileName" attr.type="string" for="edge" id="originfile">
+  <default>./tmp-safe.c</default>
+ </key>
+ <key attr.name="control" attr.type="string" for="edge" id="control"/>
+ <key attr.name="enterFunction" attr.type="string" for="edge" id="enterFunction"/>
+ <key attr.name="returnFromFunction" attr.type="string" for="edge" id="returnFrom"/>
+ <key attr.name="witness-type" attr.type="string" for="graph" id="witness-type"/>
+ <key attr.name="inputWitnessHash" attr.type="string" for="graph" id="inputwitnesshash"/>
+ <graph edgedefault="directed">
+  <data key="witness-type">correctness_witness</data>
+  <data key="sourcecodelang">C</data>
+  <data key="producer">CPAchecker 2.2.1-svn / kInduction</data>
+  <data key="specification">CHECK( init(main()), LTL(G ! call(reach_error())) )</data>
+  <data key="programfile">./tmp-safe.c</data>
+  <data key="programhash">e4df7cba34fe4fa16d918ca55a18e2cd11e6621f7a6cba9ad071ea9670c26365</data>
+  <data key="architecture">32bit</data>
+  <data key="creationtime">2023-09-28T15:07:54+02:00</data>
+  <node id="N4">
+   <data key="entry">true</data>
+  </node>
+  <node id="N5"/>
+  <edge source="N4" target="N5">
+   <data key="startline">9</data>
+   <data key="endline">9</data>
+   <data key="enterFunction">main</data>
+  </edge>
+  <node id="N9"/>
+  <edge source="N5" target="N9">
+   <data key="startline">11</data>
+   <data key="endline">11</data>
+   <data key="control">condition-true</data>
+  </edge>
+  <node id="N8"/>
+  <edge source="N5" target="N8">
+   <data key="startline">11</data>
+   <data key="endline">11</data>
+   <data key="control">condition-false</data>
+  </edge>
+  <node id="N19">
+   <data key="invariant">s &lt;= i*255 &amp;&amp; 0 &lt;= i &amp;&amp; i &lt;= 255 &amp;&amp; n &lt;= 255</data>
+   <data key="invariant.scope">main</data>
+  </node>
+  <edge source="N8" target="N19">
+   <data key="enterLoopHead">true</data>
+   <data key="startline">16</data>
+   <data key="endline">16</data>
+  </edge>
+  <node id="N16"/>
+  <edge source="N19" target="N16">
+   <data key="startline">17</data>
+   <data key="endline">17</data>
+   <data key="control">condition-false</data>
+  </edge>
+  <node id="N15"/>
+  <edge source="N19" target="N15">
+   <data key="startline">17</data>
+   <data key="endline">17</data>
+   <data key="control">condition-true</data>
+  </edge>
+  <edge source="N15" target="N19">
+   <data key="enterLoopHead">true</data>
+   <data key="startline">20</data>
+   <data key="endline">20</data>
+  </edge>
+  <node id="N20"/>
+  <edge source="N16" target="N20">
+   <data key="startline">20</data>
+   <data key="endline">20</data>
+   <data key="control">condition-false</data>
+  </edge>
+  <node id="N25"/>
+  <edge source="N16" target="N25">
+   <data key="startline">22</data>
+   <data key="endline">22</data>
+   <data key="control">condition-true</data>
+  </edge>
+  <node id="N3"/>
+  <edge source="N25" target="N3">
+   <data key="startline">24</data>
+   <data key="endline">24</data>
+   <data key="returnFrom">main</data>
+  </edge>
+  <edge source="N25" target="N3">
+   <data key="startline">28</data>
+   <data key="endline">28</data>
+   <data key="returnFrom">main</data>
+  </edge>
+  <node id="N24"/>
+  <edge source="N20" target="N24">
+   <data key="startline">26</data>
+   <data key="endline">26</data>
+   <data key="control">condition-false</data>
+  </edge>
+  <edge source="N20" target="N25">
+   <data key="startline">26</data>
+   <data key="endline">26</data>
+   <data key="control">condition-true</data>
+  </edge>
+  <edge source="N24" target="N3">
+   <data key="startline">30</data>
+   <data key="endline">30</data>
+   <data key="returnFrom">main</data>
+  </edge>
+  <edge source="N9" target="N3">
+   <data key="startline">12</data>
+   <data key="endline">12</data>
+   <data key="returnFrom">main</data>
+  </edge>
+ </graph>
+</graphml>

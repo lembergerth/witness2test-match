@@ -18,7 +18,7 @@ SPDX-FileCopyrightText = "2026 SV-COMP Community"
 SPDX-License-Identifier = "CC-BY-4.0"
 
 [[annotations]]
-path = "testdata/**"
+path = "testdata/fixed-inputs/**"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Dirk Beyer <https://www.sosy-lab.org>"
 SPDX-License-Identifier = "Apache-2.0"

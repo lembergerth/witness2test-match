@@ -52,8 +52,8 @@ func TestBinaryMissingArgs(t *testing.T) {
 
 func TestBinaryOnSymbioticExample(t *testing.T) {
 	bin := buildBinary(t)
-	witness := "../sv-witnesses/examples/unsafe-program-example.symbiotic.witness-2.0.yml"
-	program := "../sv-witnesses/examples/unsafe-program-example.c"
+	witness := filepath.Join("testdata", "sv-witnesses", "examples", "unsafe-program-example.symbiotic.witness-2.0.yml")
+	program := filepath.Join("testdata", "sv-witnesses", "examples", "unsafe-program-example.c")
 	out := t.TempDir()
 	cmd := exec.Command(bin, "--witness", witness, "--program", program, "--output", out, "--time-per-run", "10")
 	combined, err := cmd.CombinedOutput()
