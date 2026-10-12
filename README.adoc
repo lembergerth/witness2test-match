@@ -86,7 +86,7 @@ Run `witness2test --help` to see all available options.
 * Only single-line `__VERIFIER_nondet_X()` calls are recognized.
 * Witness `constraint.value` is restricted to integer / float / character /
   boolean literals; any other content is rejected at parse time as a security
-  measure (see CLAUDE.md).
+  measure.
 
 == Development and Testing
 
