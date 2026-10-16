@@ -1,4 +1,4 @@
-/* Minimal harness for witness2test instrumented programs.
+/* Minimal harness for witness2test-match instrumented programs.
  *
  * Provides:
  *   - reach_error(): exits with exitcodes.ViolationReached (213) so

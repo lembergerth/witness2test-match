@@ -1,8 +1,8 @@
-// This file is part of witness2test,
+// This file is part of witness2test-match,
 // a tool to turn SV-COMP violation witnesses (format v2) into executable tests.
-// https://gitlab.com/sosy-lab/software/witness2test
+// https://github.com/lembergerth/witness2test-match
 //
-// SPDX-FileCopyrightText: 2026 Dirk Beyer <https://www.sosy-lab.org>
+// SPDX-FileCopyrightText: 2026 Thomas Lemberger <https://thomaslemberger.com>
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -38,7 +38,7 @@ func mainWithArgs(args []string) int {
 // run is the testable entry point. It returns the desired process exit code
 // and an optional final message to print to stderr.
 func run(args []string, stdout, stderr *os.File) (int, string) {
-	fs := flag.NewFlagSet("witness2test", flag.ContinueOnError)
+	fs := flag.NewFlagSet("witness2test-match", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	witnessPath := fs.String("witness", "", "Path to the v2 violation witness YAML file (required)")
 	programPath := fs.String("program", "", "Path to the C program file (required)")
@@ -50,7 +50,7 @@ func run(args []string, stdout, stderr *os.File) (int, string) {
 		return 2, ""
 	}
 	if *printVersion {
-		fmt.Fprintf(stdout, "witness2test version %s\n", version)
+		fmt.Fprintf(stdout, "witness2test-match version %s\n", version)
 		return 0, ""
 	}
 	if *witnessPath == "" || *programPath == "" {
@@ -58,7 +58,7 @@ func run(args []string, stdout, stderr *os.File) (int, string) {
 		return 2, "Error: both --witness and --program are required"
 	}
 
-	tmpDir, err := os.MkdirTemp("", "witness2test-")
+	tmpDir, err := os.MkdirTemp("", "witness2test-match-")
 	if err != nil {
 		return 1, fmt.Sprintf("failed to create temp dir: %v", err)
 	}
@@ -73,7 +73,7 @@ func run(args []string, stdout, stderr *os.File) (int, string) {
 		time.Duration(*timePerRun)*time.Second,
 	)
 	if derr != nil {
-		return 1, fmt.Sprintf("witness2test: %v", derr)
+		return 1, fmt.Sprintf("witness2test-match: %v", derr)
 	}
 	fmt.Fprintln(stdout, formatVerdict(verdict, instrumentedPath))
 	return 0, ""

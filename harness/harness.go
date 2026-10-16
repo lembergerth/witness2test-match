@@ -1,12 +1,12 @@
-// This file is part of witness2test,
+// This file is part of witness2test-match,
 // a tool to turn SV-COMP violation witnesses (format v2) into executable tests.
-// https://gitlab.com/sosy-lab/software/witness2test
+// https://github.com/lembergerth/witness2test-match
 //
-// SPDX-FileCopyrightText: 2026 Dirk Beyer <https://www.sosy-lab.org>
+// SPDX-FileCopyrightText: 2026 Thomas Lemberger <https://thomaslemberger.com>
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Package harness exposes the minimal C harness embedded into witness2test.
+// Package harness exposes the minimal C harness embedded into witness2test-match.
 // The harness defines reach_error() (which exits with exitcodes.ViolationReached)
 // and weak default __VERIFIER_nondet_*() implementations.
 package harness

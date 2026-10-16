@@ -1,13 +1,13 @@
-// This file is part of witness2test,
+// This file is part of witness2test-match,
 // a tool to turn SV-COMP violation witnesses (format v2) into executable tests.
-// https://gitlab.com/sosy-lab/software/witness2test
+// https://github.com/lembergerth/witness2test-match
 //
-// SPDX-FileCopyrightText: 2026 Dirk Beyer <https://www.sosy-lab.org>
+// SPDX-FileCopyrightText: 2026 Thomas Lemberger <https://thomaslemberger.com>
 //
 // SPDX-License-Identifier: Apache-2.0
 
 // Package exitcodes defines the exit codes the instrumented test program emits
-// to signal validation outcomes back to witness2test. These values are the single
+// to signal validation outcomes back to witness2test-match. These values are the single
 // source of truth: the embedded C harness, the generated injection function, and
 // the verdict logic in package execution all refer to these constants.
 package exitcodes

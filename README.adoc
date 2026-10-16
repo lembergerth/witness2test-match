@@ -1,8 +1,8 @@
-// This file is part of witness2test,
+// This file is part of witness2test-match,
 // a tool to turn SV-COMP violation witnesses (format v2) into executable tests.
-// https://gitlab.com/sosy-lab/software/witness2test
+// https://github.com/lembergerth/witness2test-match
 //
-// SPDX-FileCopyrightText: 2026 Dirk Beyer <https://www.sosy-lab.org>
+// SPDX-FileCopyrightText: 2026 Thomas Lemberger <https://thomaslemberger.com>
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -44,14 +44,14 @@ papers for background.
 ----
 make deps
 make build
-# Creates binary 'bin/witness2test'
+# Creates binary 'bin/witness2test-match'
 ----
 
 == Use
 
 [source,bash]
 ----
-bin/witness2test \
+bin/witness2test-match \
     --witness path/to/witness.yml \
     --program path/to/program.c \
     --output  output/
@@ -74,7 +74,7 @@ and named in the final verdict line.
 
 === Command Line Options
 
-Run `witness2test --help` to see all available options.
+Run `witness2test-match --help` to see all available options.
 
 == Scope and limitations (v1)
 

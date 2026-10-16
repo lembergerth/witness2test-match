@@ -1,10 +1,19 @@
-# CLAUDE.md
+<!--
+This file is part of witness2test-match,
+a tool to turn SV-COMP violation witnesses (format v2) into executable tests.
+https://github.com/lembergerth/witness2test-match
+
+SPDX-FileCopyrightText: 2026 Thomas Lemberger <https://thomaslemberger.com>
+
+SPDX-License-Identifier: Apache-2.0
+-->
+# AGENTS.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
-`witness2test` turns SV-COMP violation witnesses (YAML format v2) into executable C tests that reproduce the witnessed violation. It is the dual of
+`witness2test-match` turns SV-COMP violation witnesses (YAML format v2) into executable C tests that reproduce the witnessed violation. It is the dual of
 [test-to-witness](https://gitlab.com/sosy-lab/software/test-to-witness): given a
 C program and a v2 violation witness, it extracts the nondeterministic input
 values implied by the witness's `function_return` waypoints and instruments the
@@ -41,7 +50,7 @@ Pipeline:
 ## Build and Development Commands
 
 ```bash
-make build              # build bin/witness2test with version info from git
+make build              # build bin/witness2test-match with version info from git
 make test               # run unit tests
 make integration-test   # build, then run ./integration-test.sh
 make lint               # golangci-lint
@@ -51,7 +60,7 @@ make deps               # go mod tidy
 ### Running the tool
 
 ```bash
-bin/witness2test --witness path/to/witness.yml --program path/to/program.c --output output/
+bin/witness2test-match --witness path/to/witness.yml --program path/to/program.c --output output/
 ```
 
 Options:

@@ -1,8 +1,8 @@
-// This file is part of witness2test,
+// This file is part of witness2test-match,
 // a tool to turn SV-COMP violation witnesses (format v2) into executable tests.
-// https://gitlab.com/sosy-lab/software/witness2test
+// https://github.com/lembergerth/witness2test-match
 //
-// SPDX-FileCopyrightText: 2026 Dirk Beyer <https://www.sosy-lab.org>
+// SPDX-FileCopyrightText: 2026 Thomas Lemberger <https://thomaslemberger.com>
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -249,7 +249,7 @@ func buildDefinitions(witnessed []witnessedSite, includeReachError bool) string 
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString("/* witness2test: generated definitions */\n")
+	b.WriteString("/* witness2test-match: generated definitions */\n")
 	b.WriteString("extern void _Exit(int);\n")
 	b.WriteString("extern long write(int, const void *, unsigned long);\n")
 	if includeReachError {
@@ -265,7 +265,7 @@ func buildDefinitions(witnessed []witnessedSite, includeReachError bool) string 
 func generateInjectionFunction(s NondetCallSite, values []string) string {
 	returnType := actualFunctionTypeFromShortName(s.VariantShortName)
 	funcName := fmt.Sprintf("__VERIFIER_nondet_value_injection_%d_%d", s.Line, s.ColumnOfClosingParen)
-	msg := fmt.Sprintf("witness2test: nondet overflow at %d:%d\\n", s.Line, s.ColumnOfClosingParen)
+	msg := fmt.Sprintf("witness2test-match: nondet overflow at %d:%d\\n", s.Line, s.ColumnOfClosingParen)
 	return fmt.Sprintf(
 		"%[1]s %[2]s(void) {\n"+
 			"  static const %[1]s values[] = { %[3]s };\n"+

@@ -1,8 +1,8 @@
-// This file is part of witness2test,
+// This file is part of witness2test-match,
 // a tool to turn SV-COMP violation witnesses (format v2) into executable tests.
-// https://gitlab.com/sosy-lab/software/witness2test
+// https://github.com/lembergerth/witness2test-match
 //
-// SPDX-FileCopyrightText: 2026 Dirk Beyer <https://www.sosy-lab.org>
+// SPDX-FileCopyrightText: 2026 Thomas Lemberger <https://thomaslemberger.com>
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -21,7 +21,7 @@ func buildBinary(t *testing.T) string {
 		t.Skipf("go not available: %v", err)
 	}
 	dir := t.TempDir()
-	bin := filepath.Join(dir, "witness2test")
+	bin := filepath.Join(dir, "witness2test-match")
 	cmd := exec.Command("go", "build", "-o", bin, ".")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -36,7 +36,7 @@ func TestBinaryVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run: %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), "witness2test version") {
+	if !strings.Contains(string(out), "witness2test-match version") {
 		t.Errorf("unexpected output: %s", out)
 	}
 }
@@ -58,7 +58,7 @@ func TestBinaryOnSymbioticExample(t *testing.T) {
 	cmd := exec.Command(bin, "--witness", witness, "--program", program, "--output", out, "--time-per-run", "10")
 	combined, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("witness2test failed: %v\n%s", err, combined)
+		t.Fatalf("witness2test-match failed: %v\n%s", err, combined)
 	}
 	if !strings.Contains(string(combined), "Verdict: Confirmed") {
 		t.Errorf("expected Confirmed verdict, got:\n%s", combined)

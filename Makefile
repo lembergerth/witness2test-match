@@ -1,8 +1,8 @@
-# This file is part of witness2test,
+# This file is part of witness2test-match,
 # a tool to turn SV-COMP violation witnesses (format v2) into executable tests.
-# https://gitlab.com/sosy-lab/software/witness2test
+# https://github.com/lembergerth/witness2test-match
 #
-# SPDX-FileCopyrightText: 2026 Dirk Beyer <https://www.sosy-lab.org>
+# SPDX-FileCopyrightText: 2026 Thomas Lemberger <https://thomaslemberger.com>
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -12,7 +12,7 @@ GOCMD=go
 GOBUILD=$(GOCMD) build
 GOCLEAN=$(GOCMD) clean
 GOTEST=$(GOCMD) test
-BINARY_NAME=bin/witness2test
+BINARY_NAME=bin/witness2test-match
 
 build:
 	$(GOBUILD) -o $(BINARY_NAME) -v -ldflags="-X main.version=$(shell git describe --always --dirty 2>/dev/null || echo unknown)"

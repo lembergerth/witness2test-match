@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# This file is part of witness2test,
+# This file is part of witness2test-match,
 # a tool to turn SV-COMP violation witnesses (format v2) into executable tests.
-# https://gitlab.com/sosy-lab/software/witness2test
+# https://github.com/lembergerth/witness2test-match
 #
-# SPDX-FileCopyrightText: 2026 Dirk Beyer <https://www.sosy-lab.org>
+# SPDX-FileCopyrightText: 2026 Thomas Lemberger <https://thomaslemberger.com>
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-# Runs witness2test against every subdirectory of integration/ that has a
+# Runs witness2test-match against every subdirectory of integration/ that has a
 # witness.yml, program.c, and expected-verdict file. Each expected-verdict
 # file contains the verdict string the binary's output is expected to contain.
 
@@ -15,7 +15,7 @@ set -u
 
 cd "$(dirname "$0")"
 
-BIN=bin/witness2test
+BIN=bin/witness2test-match
 if [[ ! -x "$BIN" ]]; then
   echo "binary $BIN not built; run 'make build' first" >&2
   exit 2
@@ -35,7 +35,7 @@ for dir in integration/*/; do
     continue
   fi
   expected="$(tr -d '[:space:]' < "$expected_file")"
-  outdir="$(mktemp -d "${TMPDIR:-/tmp}/witness2test-it-XXXXXX")"
+  outdir="$(mktemp -d "${TMPDIR:-/tmp}/witness2test-match-it-XXXXXX")"
   output="$("$BIN" --witness "$witness" --program "$program" --output "$outdir" --time-per-run 10 2>&1)"
   rc=$?
   if [[ $rc -ne 0 ]]; then
