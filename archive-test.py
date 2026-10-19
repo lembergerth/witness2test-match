@@ -25,7 +25,7 @@ class ArchiveIntegrationTest(unittest.TestCase):
             "integration-test.sh",
             "REUSE.toml",
             "LICENSE",
-            "README.adoc",
+            "README",
         }
         for directory in ("integration", "LICENSES"):
             expected_paths.add(f"{directory}/")
@@ -52,8 +52,9 @@ class ArchiveIntegrationTest(unittest.TestCase):
             for path in sorted(expected_paths):
                 if not path.endswith("/"):
                     with self.subTest(path=path):
+                        source_path = "README.adoc" if path == "README" else path
                         self.assertEqual(
-                            (release / path).read_bytes(), (root / path).read_bytes()
+                            (release / path).read_bytes(), (root / source_path).read_bytes()
                         )
             for path in ("bin/witness2test-match", "smoketest.sh", "integration-test.sh"):
                 with self.subTest(executable=path):

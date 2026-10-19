@@ -36,7 +36,8 @@ sv-comp-archive: build
 	trap 'rm -rf "$$staging"' EXIT HUP INT TERM; \
 	mkdir -p "$$staging/$$package/bin"; \
 	cp $(BINARY_NAME) "$$staging/$$package/bin/"; \
-	cp -R smoketest.sh integration-test.sh integration REUSE.toml LICENSE LICENSES README.adoc "$$staging/$$package/"; \
+	cp -R smoketest.sh integration-test.sh integration REUSE.toml LICENSE LICENSES "$$staging/$$package/"; \
+	cp README.adoc "$$staging/$$package/README"; \
 	(cd "$$staging" && zip -qr "$$archive" "$$package"); \
 	mv "$$staging/$$archive" "$$archive"; \
 	echo "Created $$archive"
