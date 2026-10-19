@@ -45,7 +45,7 @@ func compileAndRun(t *testing.T, programCode string) Verdict {
 	if err := os.WriteFile(harness, []byte("// empty harness for unit test\n"), 0o644); err != nil {
 		t.Fatalf("write harness: %v", err)
 	}
-	binary, err := Compile(programCode, harness, dir)
+	binary, err := Compile(programCode, harness, CompileOptions{OutputDir: dir})
 	if err != nil {
 		t.Fatalf("Compile: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestRunTimeoutKillsProgram(t *testing.T) {
 	if err := os.WriteFile(harness, []byte(""), 0o644); err != nil {
 		t.Fatalf("write harness: %v", err)
 	}
-	binary, err := Compile(src, harness, dir)
+	binary, err := Compile(src, harness, CompileOptions{OutputDir: dir})
 	if err != nil {
 		t.Fatalf("Compile: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestCompileFailureSurfacesStderr(t *testing.T) {
 	if err := os.WriteFile(harness, []byte(""), 0o644); err != nil {
 		t.Fatalf("write harness: %v", err)
 	}
-	_, err := Compile("not C at all !!!\n", harness, dir)
+	_, err := Compile("not C at all !!!\n", harness, CompileOptions{OutputDir: dir})
 	if err == nil {
 		t.Fatal("expected compile error")
 	}
@@ -127,13 +127,49 @@ func TestCompileFailureSurfacesStderr(t *testing.T) {
 	}
 }
 
+func TestCompileDataModels(t *testing.T) {
+	requireGCC(t)
+	for _, tt := range []struct {
+		model string
+		bytes int
+	}{
+		{"", 8},
+		{"LP64", 8},
+		{"ILP32", 4},
+	} {
+		t.Run(tt.model, func(t *testing.T) {
+			dir := t.TempDir()
+			harness := filepath.Join(dir, "harness.c")
+			assertions := fmt.Sprintf(`_Static_assert(sizeof(int) == 4, "int size");
+_Static_assert(sizeof(long) == %d, "long size");
+_Static_assert(sizeof(void *) == %d, "pointer size");
+`, tt.bytes, tt.bytes)
+			if err := os.WriteFile(harness, []byte(assertions), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			_, err := Compile(assertions+"int main(void) { return 0; }\n", harness, CompileOptions{OutputDir: dir, Model: tt.model})
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestCompileRejectsInvalidModel(t *testing.T) {
+	_, err := Compile("", "harness.c", CompileOptions{OutputDir: t.TempDir(), Model: "LLP64"})
+	want := `invalid data model "LLP64": expected ILP32 or LP64`
+	if err == nil || err.Error() != want {
+		t.Fatalf("Compile error = %v, want %q", err, want)
+	}
+}
+
 func TestCompileRejectsLeadingDashPaths(t *testing.T) {
-	_, err := Compile("int main(){return 0;}", "-suspicious.c", t.TempDir())
+	_, err := Compile("int main(){return 0;}", "-suspicious.c", CompileOptions{OutputDir: t.TempDir()})
 	if err == nil {
 		t.Error("Compile should reject harness path starting with '-'")
 	}
 	dir := t.TempDir()
-	_, err = Compile("int main(){return 0;}", filepath.Join(dir, "harness.c"), "/tmp/-bad")
+	_, err = Compile("int main(){return 0;}", filepath.Join(dir, "harness.c"), CompileOptions{OutputDir: "/tmp/-bad"})
 	// outputDir basename "-bad" must be rejected.
 	if err == nil {
 		t.Error("Compile should reject output dir starting with '-'")
@@ -162,7 +198,7 @@ func TestRunParentContextCanceled(t *testing.T) {
 	if err := os.WriteFile(harness, []byte(""), 0o644); err != nil {
 		t.Fatalf("write harness: %v", err)
 	}
-	binary, err := Compile(src, harness, dir)
+	binary, err := Compile(src, harness, CompileOptions{OutputDir: dir})
 	if err != nil {
 		t.Fatalf("Compile: %v", err)
 	}

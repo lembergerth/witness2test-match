@@ -28,11 +28,11 @@ import (
 type VerdictStatus string
 
 const (
-	Confirmed           VerdictStatus = "Confirmed"
-	Inconsistent        VerdictStatus = "WitnessInconsistent"
-	NotConfirmed        VerdictStatus = "NotConfirmed"
-	Timeout             VerdictStatus = "Timeout"
-	WitnessUnsupported  VerdictStatus = "WitnessUnsupported"
+	Confirmed          VerdictStatus = "Confirmed"
+	Inconsistent       VerdictStatus = "WitnessInconsistent"
+	NotConfirmed       VerdictStatus = "NotConfirmed"
+	Timeout            VerdictStatus = "Timeout"
+	WitnessUnsupported VerdictStatus = "WitnessUnsupported"
 )
 
 // Verdict captures the outcome of one Run.
@@ -42,17 +42,22 @@ type Verdict struct {
 	Stderr   string
 }
 
+type CompileOptions struct {
+	OutputDir string
+	Model     string
+}
+
 // Compile compiles the instrumented program (programCode, fed via stdin) together
-// with harnessPath into a binary written under outputDir, and returns its path.
-func Compile(programCode, harnessPath, outputDir string) (string, error) {
+// with harnessPath into a binary written under options.OutputDir, and returns its path.
+func Compile(programCode, harnessPath string, options CompileOptions) (string, error) {
 	if err := checkNoLeadingDash(harnessPath, "harness path"); err != nil {
 		return "", err
 	}
-	if err := checkNoLeadingDash(outputDir, "output dir"); err != nil {
+	if err := checkNoLeadingDash(options.OutputDir, "output dir"); err != nil {
 		return "", err
 	}
 
-	binary := filepath.Join(outputDir, "program")
+	binary := filepath.Join(options.OutputDir, "program")
 	args := []string{
 		harnessPath,
 		"-x", "c", "-",
@@ -60,6 +65,13 @@ func Compile(programCode, harnessPath, outputDir string) (string, error) {
 		"-std=gnu11",
 		"-Wno-attributes",
 		"-lm",
+	}
+	switch options.Model {
+	case "ILP32":
+		args = append(args, "-m32")
+	case "", "LP64":
+	default:
+		return "", fmt.Errorf("invalid data model %q: expected ILP32 or LP64", options.Model)
 	}
 	cmd := exec.Command("gcc", args...)
 	cmd.Stdin = strings.NewReader(programCode)

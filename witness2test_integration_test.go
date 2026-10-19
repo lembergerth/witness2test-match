@@ -9,6 +9,7 @@
 package main
 
 import (
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -50,17 +51,76 @@ func TestBinaryMissingArgs(t *testing.T) {
 	}
 }
 
+func TestBinaryILP32Violation(t *testing.T) {
+	bin := buildBinary(t)
+	dir := t.TempDir()
+	program := filepath.Join(dir, "program.c")
+	witness := filepath.Join(dir, "witness.yml")
+	source := strings.Replace(programWithSingleNondet, "if (x == 42)",
+		"if (x == 42 && sizeof(int) == 4 && sizeof(long) == 4 && sizeof(void *) == 4)", 1)
+	writeFile(t, program, source)
+	writeFile(t, witness, witnessHitsViolation)
+	for _, tt := range []struct {
+		model    string
+		verdict  string
+		exitCode int
+	}{
+		{"ILP32", "Confirmed unreach-call", 213},
+		{"LP64", "NotConfirmed", 0},
+	} {
+		t.Run(tt.model, func(t *testing.T) {
+			out := t.TempDir()
+			combined, err := exec.Command(bin, "--witness", witness, "--program", program,
+				"--output", out, "--model", tt.model, "--time-per-run", "5").CombinedOutput()
+			if err != nil {
+				t.Fatalf("witness2test-match failed: %v\n%s", err, combined)
+			}
+			want := fmt.Sprintf("Verdict: %s (exit code %d). Instrumented program: %s\n",
+				tt.verdict, tt.exitCode, filepath.Join(out, "instrumented_program.c"))
+			if string(combined) != want {
+				t.Errorf("output = %q, want %q", combined, want)
+			}
+		})
+	}
+}
+
 func TestBinaryOnSymbioticExample(t *testing.T) {
 	bin := buildBinary(t)
 	witness := filepath.Join("testdata", "sv-witnesses", "examples", "unsafe-program-example.symbiotic.witness-2.0.yml")
 	program := filepath.Join("testdata", "sv-witnesses", "examples", "unsafe-program-example.c")
-	out := t.TempDir()
-	cmd := exec.Command(bin, "--witness", witness, "--program", program, "--output", out, "--time-per-run", "10")
-	combined, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("witness2test-match failed: %v\n%s", err, combined)
+	tests := []struct {
+		name     string
+		content  string
+		property string
+	}{
+		{"default", "", "unreach-call"},
+		{"unreach-call", "CHECK( init(main()), LTL(G ! call(reach_error())) )", "unreach-call"},
+		{"valid-free", "CHECK( init(main()), LTL(G valid-free) )", "valid-memsafety(valid-free)"},
+		{"valid-deref", "CHECK( init(main()), LTL(G valid-deref) )", "valid-memsafety(valid-deref)"},
+		{"valid-memtrack", "CHECK( init(main()), LTL(G valid-memtrack) )", "valid-memsafety(valid-memtrack)"},
+		{"no-overflow", "CHECK( init(main()), LTL(G ! overflow) )", "no-overflow"},
+		{"no-data-race", "CHECK( init(main()), LTL(G ! data-race) )", "no-data-race"},
+		{"valid-memcleanup", "CHECK( init(main()), LTL(G valid-memcleanup) )", "valid-memcleanup"},
+		{"multiple overflow first", "CHECK(init(main()),LTL(G ! overflow))\nCHECK(init(main()),LTL(G ! call(reach_error())))", "no-overflow"},
+		{"multiple unreach first", "CHECK(init(main()),LTL(G ! call(reach_error())))\nCHECK(init(main()),LTL(G ! overflow))", "unreach-call"},
 	}
-	if !strings.Contains(string(combined), "Verdict: Confirmed") {
-		t.Errorf("expected Confirmed verdict, got:\n%s", combined)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out := t.TempDir()
+			args := []string{"--witness", witness, "--program", program, "--output", out, "--time-per-run", "10"}
+			if tt.content != "" {
+				path := filepath.Join(t.TempDir(), "properties.prp")
+				writeFile(t, path, tt.content)
+				args = append(args, "--property", path)
+			}
+			combined, err := exec.Command(bin, args...).CombinedOutput()
+			if err != nil {
+				t.Fatalf("witness2test-match failed: %v\n%s", err, combined)
+			}
+			want := fmt.Sprintf("Verdict: Confirmed %s (exit code 213). Instrumented program: %s\n", tt.property, filepath.Join(out, "instrumented_program.c"))
+			if string(combined) != want {
+				t.Errorf("output = %q, want %q", combined, want)
+			}
+		})
 	}
 }

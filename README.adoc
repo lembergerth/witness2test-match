@@ -37,6 +37,8 @@ papers for background.
 
 * Go 1.24.3 or later
 * GCC
+* For `--model ILP32`: GCC support for `-m32`, 32-bit C development libraries,
+  and a system capable of running 32-bit executables
 
 === Building
 
@@ -54,6 +56,7 @@ make build
 bin/witness2test-match \
     --witness path/to/witness.yml \
     --program path/to/program.c \
+    --property path/to/property.prp \
     --output  output/
 ----
 
@@ -62,7 +65,7 @@ and named in the final verdict line.
 
 === Verdicts
 
-* `Confirmed` — the compiled instrumented program reached the witnessed
+* `Confirmed <property>` — the compiled instrumented program reached the witnessed
   violation point.
 * `NotConfirmed` — the program completed without reaching the violation point.
 * `WitnessInconsistent` — a witnessed nondet call site was reached more times
@@ -75,6 +78,35 @@ and named in the final verdict line.
 === Command Line Options
 
 Run `witness2test-match --help` to see all available options.
+
+`--model ILP32` compiles the program and harness with GCC's `-m32` option.
+`--model LP64` (the default) uses no special compiler option and assumes a
+64-bit host. Other model values are rejected.
+
+`--property <file>` selects the properties to validate. If omitted, the property
+defaults to `unreach-call`. The file accepts one `CHECK` expression per nonblank
+line and preserves their order:
+
+[cols="2,1",options="header"]
+|===
+|Expression |Property
+|`CHECK( init(main()), LTL(G ! call(reach_error())) )` |`unreach-call`
+|`CHECK( init(main()), LTL(G valid-free) )` |`valid-memsafety(valid-free)`
+|`CHECK( init(main()), LTL(G valid-deref) )` |`valid-memsafety(valid-deref)`
+|`CHECK( init(main()), LTL(G valid-memtrack) )` |`valid-memsafety(valid-memtrack)`
+|`CHECK( init(main()), LTL(G ! overflow) )` |`no-overflow`
+|`CHECK( init(main()), LTL(G ! data-race) )` |`no-data-race`
+|`CHECK( init(main()), LTL(G valid-memcleanup) )` |`valid-memcleanup`
+|===
+
+Whitespace around punctuation is optional. Within the LTL formula, `G` and `!`
+must be separated from their operands by whitespace. Identifiers and property
+names must remain intact. Empty files and unrecognized expressions are rejected.
+
+The tool retains every selected property. Checking additional property types
+is planned; execution currently detects only calls to `reach_error()`.
+For now, a confirmed execution reports the first property in the file, for
+example `Verdict: Confirmed unreach-call (exit code 213). Instrumented program: output/instrumented_program.c`.
 
 == Scope and limitations (v1)
 

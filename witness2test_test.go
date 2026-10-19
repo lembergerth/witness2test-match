@@ -9,8 +9,10 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -149,7 +151,7 @@ func runPipeline(t *testing.T, programSrc, witnessSrc string) (execution.Verdict
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		t.Fatalf("mkdir output: %v", err)
 	}
-	v, instPath, err := turnWitnessToTest(wit, prog, dir, out, 5*time.Second)
+	v, instPath, err := turnWitnessToTest(wit, prog, dir, out, executionOptions{timeout: 5 * time.Second})
 	if err != nil {
 		t.Fatalf("turnWitnessToTest: %v", err)
 	}
@@ -198,19 +200,75 @@ func TestTurnWitnessToTestUnsupported(t *testing.T) {
 	}
 }
 
-func TestFormatVerdictIncludesPath(t *testing.T) {
-	v := execution.Verdict{Status: execution.Confirmed, ExitCode: 213}
-	got := formatVerdict(v, "/tmp/out/instrumented_program.c")
-	if !strings.Contains(got, "Confirmed") || !strings.Contains(got, "/tmp/out/instrumented_program.c") {
-		t.Errorf("verdict line: %q", got)
+func TestFormatVerdict(t *testing.T) {
+	tests := []struct {
+		name       string
+		verdict    execution.Verdict
+		properties []property
+		want       string
+	}{
+		{"confirmed unreach", execution.Verdict{Status: execution.Confirmed, ExitCode: 213}, []property{unreachCall}, "Verdict: Confirmed unreach-call (exit code 213). Instrumented program: /tmp/x.c"},
+		{"confirmed first property", execution.Verdict{Status: execution.Confirmed, ExitCode: 213}, []property{"no-overflow", unreachCall}, "Verdict: Confirmed no-overflow (exit code 213). Instrumented program: /tmp/x.c"},
+		{"not confirmed", execution.Verdict{Status: execution.NotConfirmed}, []property{"no-overflow"}, "Verdict: NotConfirmed (exit code 0). Instrumented program: /tmp/x.c"},
+		{"inconsistent", execution.Verdict{Status: execution.Inconsistent, ExitCode: 214}, []property{unreachCall}, "Verdict: WitnessInconsistent (exit code 214). Instrumented program: /tmp/x.c"},
+		{"timeout", execution.Verdict{Status: execution.Timeout, ExitCode: -1}, []property{unreachCall}, "Verdict: Timeout (exit code -1). Instrumented program: /tmp/x.c"},
+		{"unsupported with stderr", execution.Verdict{Status: execution.WitnessUnsupported, Stderr: "diagnostic line"}, []property{unreachCall}, "Verdict: WitnessUnsupported (exit code 0). Instrumented program: /tmp/x.c\n--- program stderr ---\ndiagnostic line"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := formatVerdict(tt.verdict, "/tmp/x.c", tt.properties); got != tt.want {
+				t.Errorf("formatVerdict = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
-func TestFormatVerdictIncludesStderr(t *testing.T) {
-	v := execution.Verdict{Status: execution.WitnessUnsupported, Stderr: "diagnostic line"}
-	got := formatVerdict(v, "/tmp/x.c")
-	if !strings.Contains(got, "diagnostic line") {
-		t.Errorf("verdict should include stderr: %q", got)
+func TestReadProperties(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "properties.prp")
+	writeFile(t, path, "CHECK(init(main()),LTL(G valid-deref))\nCHECK(init(main()),LTL(G ! overflow))")
+	properties, err := readProperties(path)
+	want := []property{"valid-memsafety(valid-deref)", "no-overflow"}
+	if err != nil || !reflect.DeepEqual(properties, want) {
+		t.Errorf("readProperties = %v, %v; want %v, nil", properties, err, want)
+	}
+	properties, err = readProperties("")
+	if err != nil || !reflect.DeepEqual(properties, []property{unreachCall}) {
+		t.Errorf("default properties = %v, %v; want [unreach-call], nil", properties, err)
+	}
+}
+
+func TestRunRejectsInvalidPropertyFiles(t *testing.T) {
+	for _, content := range []string{"", "CHECK(init(main()),LTL(G unknown))"} {
+		t.Run(content, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "properties.prp")
+			writeFile(t, path, content)
+			wantMessage := fmt.Sprintf("witness2test-match: property file %q: property file contains no properties", path)
+			if content != "" {
+				wantMessage = fmt.Sprintf("witness2test-match: property file %q: line 1: unrecognized property expression %q", path, content)
+			}
+			out := filepath.Join(dir, "out")
+			exit, msg := run([]string{"--witness", "unused.yml", "--program", "unused.c", "--property", path, "--output", out}, os.Stdout, os.Stderr)
+			if exit != 1 || msg != wantMessage {
+				t.Errorf("run = %d, %q; want 1, %q", exit, msg, wantMessage)
+			}
+			if _, err := os.Stat(out); !os.IsNotExist(err) {
+				t.Errorf("output directory exists after invalid property input: %v", err)
+			}
+		})
+	}
+}
+
+func TestRunRejectsMissingPropertyFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing.prp")
+	_, readErr := os.ReadFile(path)
+	if readErr == nil {
+		t.Fatal("expected missing property file")
+	}
+	exit, msg := run([]string{"--witness", "unused.yml", "--program", "unused.c", "--property", path}, os.Stdout, os.Stderr)
+	wantMessage := fmt.Sprintf("witness2test-match: failed to read property file: %v", readErr)
+	if exit != 1 || msg != wantMessage {
+		t.Errorf("run = %d, %q; want 1, %q", exit, msg, wantMessage)
 	}
 }
 
@@ -231,6 +289,43 @@ func TestRunVersion(t *testing.T) {
 	}
 }
 
+func TestRunReportsVersionWriteError(t *testing.T) {
+	stdout := createClosedOutput(t)
+	exit, msg := run([]string{"--version"}, stdout, os.Stderr)
+	writeErr := &os.PathError{Op: "write", Path: stdout.Name(), Err: os.ErrClosed}
+	wantMessage := fmt.Sprintf("witness2test-match: failed to write version: %v", writeErr)
+	if exit != 1 || msg != wantMessage {
+		t.Errorf("run = %d, %q; want 1, %q", exit, msg, wantMessage)
+	}
+}
+
+func TestRunReportsVerdictWriteError(t *testing.T) {
+	dir := t.TempDir()
+	prog := filepath.Join(dir, "program.c")
+	wit := filepath.Join(dir, "witness.yml")
+	writeFile(t, prog, programWithSingleNondet)
+	writeFile(t, wit, witnessHitsViolation)
+	stdout := createClosedOutput(t)
+	exit, msg := run([]string{"--witness", wit, "--program", prog, "--output", filepath.Join(dir, "out")}, stdout, os.Stderr)
+	writeErr := &os.PathError{Op: "write", Path: stdout.Name(), Err: os.ErrClosed}
+	wantMessage := fmt.Sprintf("witness2test-match: failed to write verdict: %v", writeErr)
+	if exit != 1 || msg != wantMessage {
+		t.Errorf("run = %d, %q; want 1, %q", exit, msg, wantMessage)
+	}
+}
+
+func createClosedOutput(t *testing.T) *os.File {
+	t.Helper()
+	stdout, err := os.CreateTemp(t.TempDir(), "stdout-")
+	if err != nil {
+		t.Fatalf("create stdout: %v", err)
+	}
+	if err := stdout.Close(); err != nil {
+		t.Fatalf("close stdout: %v", err)
+	}
+	return stdout
+}
+
 func TestMainWithArgsPrintsMessageAndExits(t *testing.T) {
 	if got := mainWithArgs(nil); got != 2 {
 		t.Errorf("mainWithArgs(nil) = %d, want 2", got)
@@ -241,6 +336,28 @@ func TestRunUnknownFlag(t *testing.T) {
 	exit, _ := run([]string{"--no-such-flag"}, os.Stdout, os.Stderr)
 	if exit != 2 {
 		t.Errorf("exit=%d, want 2 for unknown flag", exit)
+	}
+}
+
+func TestRunRejectsInvalidModel(t *testing.T) {
+	for _, model := range []string{"", "ilp32", "lp64", "LLP64", "-m32"} {
+		t.Run(model, func(t *testing.T) {
+			out := filepath.Join(t.TempDir(), "out")
+			exit, msg := run([]string{"--witness", "unused.yml", "--program", "unused.c", "--output", out, "--model", model}, os.Stdout, os.Stderr)
+			if exit != 2 || msg != "" {
+				t.Errorf("run = %d, %q; want 2, empty message", exit, msg)
+			}
+			if _, err := os.Stat(out); !os.IsNotExist(err) {
+				t.Errorf("output directory exists after invalid model: %v", err)
+			}
+		})
+	}
+}
+
+func TestRunRejectsMissingModelArgument(t *testing.T) {
+	exit, msg := run([]string{"--model"}, os.Stdout, os.Stderr)
+	if exit != 2 || msg != "" {
+		t.Errorf("run = %d, %q; want 2, empty message", exit, msg)
 	}
 }
 
@@ -269,7 +386,7 @@ func TestTurnWitnessToTestFailsWritingInstrumented(t *testing.T) {
 	wit := filepath.Join(dir, "w.yml")
 	writeFile(t, prog, programWithSingleNondet)
 	writeFile(t, wit, witnessHitsViolation)
-	_, _, err := turnWitnessToTest(wit, prog, dir, output, time.Second)
+	_, _, err := turnWitnessToTest(wit, prog, dir, output, executionOptions{timeout: time.Second})
 	if err == nil {
 		t.Error("expected error writing instrumented_program.c into a non-directory output")
 	}
@@ -283,14 +400,14 @@ func TestTurnWitnessToTestFailsWritingUnsupportedInstrumented(t *testing.T) {
 	wit := filepath.Join(dir, "w.yml")
 	writeFile(t, prog, programWithSingleNondet)
 	writeFile(t, wit, witnessAssumptionOnly)
-	_, _, err := turnWitnessToTest(wit, prog, dir, output, time.Second)
+	_, _, err := turnWitnessToTest(wit, prog, dir, output, executionOptions{timeout: time.Second})
 	if err == nil {
 		t.Error("expected error writing the unsupported-witness path")
 	}
 }
 
 func TestTurnWitnessToTestRejectsMissingWitness(t *testing.T) {
-	_, _, err := turnWitnessToTest("/nonexistent.yml", "/nonexistent.c", t.TempDir(), t.TempDir(), time.Second)
+	_, _, err := turnWitnessToTest("/nonexistent.yml", "/nonexistent.c", t.TempDir(), t.TempDir(), executionOptions{timeout: time.Second})
 	if err == nil {
 		t.Error("expected error for missing files")
 	}
@@ -300,7 +417,7 @@ func TestTurnWitnessToTestRejectsMissingProgram(t *testing.T) {
 	dir := t.TempDir()
 	wit := filepath.Join(dir, "witness.yml")
 	writeFile(t, wit, witnessHitsViolation)
-	_, _, err := turnWitnessToTest(wit, "/nonexistent.c", dir, dir, time.Second)
+	_, _, err := turnWitnessToTest(wit, "/nonexistent.c", dir, dir, executionOptions{timeout: time.Second})
 	if err == nil {
 		t.Error("expected error for missing program")
 	}
@@ -312,7 +429,7 @@ func TestTurnWitnessToTestRejectsMalformedWitness(t *testing.T) {
 	prog := filepath.Join(dir, "program.c")
 	writeFile(t, wit, "not: [valid yaml")
 	writeFile(t, prog, programWithSingleNondet)
-	_, _, err := turnWitnessToTest(wit, prog, dir, dir, time.Second)
+	_, _, err := turnWitnessToTest(wit, prog, dir, dir, executionOptions{timeout: time.Second})
 	if err == nil {
 		t.Error("expected error for malformed witness")
 	}
@@ -342,7 +459,7 @@ func TestRunFailsOnCompileError(t *testing.T) {
 	witPath := filepath.Join(dir, "witness.yml")
 	writeFile(t, progPath, prog)
 	writeFile(t, witPath, wit)
-	_, _, err := turnWitnessToTest(witPath, progPath, dir, dir, time.Second)
+	_, _, err := turnWitnessToTest(witPath, progPath, dir, dir, executionOptions{timeout: time.Second})
 	if err == nil {
 		t.Error("expected compile error")
 	}
@@ -369,7 +486,7 @@ func TestTurnWitnessToTestRejectsMismatchedLocation(t *testing.T) {
 	witPath := filepath.Join(dir, "witness.yml")
 	writeFile(t, progPath, prog)
 	writeFile(t, witPath, wit)
-	_, _, err := turnWitnessToTest(witPath, progPath, dir, dir, time.Second)
+	_, _, err := turnWitnessToTest(witPath, progPath, dir, dir, executionOptions{timeout: time.Second})
 	if err == nil {
 		t.Error("expected error for location mismatch")
 	}
