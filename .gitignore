@@ -15,6 +15,7 @@
 
 bin/
 witness2test-match
+witness2test-match-*.zip
 
 # Test binary, built with `go test -c`
 *.test

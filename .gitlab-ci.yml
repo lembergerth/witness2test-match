@@ -24,6 +24,15 @@ integration-test:
     when: on_failure
     expire_in: "7 days"
 
+archive-test:
+  stage: test
+  image: golang:1.24.3-bookworm
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends python3 zip unzip
+  script:
+    - make archive-test
+
 reuse:
   stage: test
   image:

@@ -95,7 +95,12 @@ Run `witness2test-match --help` to see all available options.
 make test
 make lint
 make integration-test
+make archive-test
 ----
+
+`make archive-test` requires Python 3, `zip`, and `unzip` in addition to the build
+dependencies. It builds the release archive, checks its layout, contents, and
+executable permissions, and runs the extracted smoke test from another directory.
 
 == License
 
