@@ -330,7 +330,7 @@ func statementSpans(lines []string, from, to int) bool {
 func formatVerdict(v execution.Verdict, instrumentedPath string) string {
 	status := string(v.Status)
 	if v.Status == execution.Confirmed {
-		status += " " + string(v.Violated)
+		status += " " + v.Violated.Name()
 	}
 	msg := fmt.Sprintf("Verdict: %s (exit code %d). Instrumented program: %s",
 		status, v.ExitCode, instrumentedPath)

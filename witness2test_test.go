@@ -213,7 +213,7 @@ func TestFormatVerdict(t *testing.T) {
 		want    string
 	}{
 		{"confirmed unreach", execution.Verdict{Status: execution.Confirmed, ExitCode: 213, Violated: property.UnreachCall}, "Verdict: Confirmed unreach-call (exit code 213). Instrumented program: /tmp/x.c"},
-		{"confirmed subproperty", execution.Verdict{Status: execution.Confirmed, ExitCode: 215, Violated: property.ValidDeref}, "Verdict: Confirmed valid-memsafety(valid-deref) (exit code 215). Instrumented program: /tmp/x.c"},
+		{"confirmed subproperty", execution.Verdict{Status: execution.Confirmed, ExitCode: 215, Violated: property.ValidDeref}, "Verdict: Confirmed valid-deref (exit code 215). Instrumented program: /tmp/x.c"},
 		{"not confirmed", execution.Verdict{Status: execution.NotConfirmed}, "Verdict: NotConfirmed (exit code 0). Instrumented program: /tmp/x.c"},
 		{"inconsistent", execution.Verdict{Status: execution.Inconsistent, ExitCode: 214}, "Verdict: WitnessInconsistent (exit code 214). Instrumented program: /tmp/x.c"},
 		{"timeout", execution.Verdict{Status: execution.Timeout, ExitCode: -1}, "Verdict: Timeout (exit code -1). Instrumented program: /tmp/x.c"},

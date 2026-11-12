@@ -105,8 +105,9 @@ witness that claims a property outside the `--property` selection, or a
 program that does not compile. It is `2` for wrong command-line usage.
 
 * `Confirmed <property>` — the execution violated `<property>`, which is one of
-  the properties the witness claims to be violated, for example
-  `Confirmed valid-memsafety(valid-deref)`.
+  the properties the witness claims to be violated. A memory-safety
+  subproperty is named without `valid-memsafety`, as SV-COMP reports it, for
+  example `Confirmed valid-deref`.
 * `NotConfirmed` — the execution did not violate a claimed property, or it
   violated it at a different line than the target waypoint of the witness names.
 * `WitnessInconsistent` — a witnessed nondet call site was reached more times
