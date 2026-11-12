@@ -144,3 +144,20 @@ func TestContains(t *testing.T) {
 		t.Error("Contains gives wrong answers")
 	}
 }
+
+func TestName(t *testing.T) {
+	want := map[Property]string{
+		UnreachCall:     "unreach-call",
+		ValidFree:       "valid-free",
+		ValidDeref:      "valid-deref",
+		ValidMemtrack:   "valid-memtrack",
+		NoOverflow:      "no-overflow",
+		NoDataRace:      "no-data-race",
+		ValidMemcleanup: "valid-memcleanup",
+	}
+	for p, name := range want {
+		if got := p.Name(); got != name {
+			t.Errorf("%s.Name() = %q, want %q", p, got, name)
+		}
+	}
+}

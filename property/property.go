@@ -69,6 +69,16 @@ func (p Property) Supported() bool {
 	return p != NoDataRace
 }
 
+// Name returns the name of p as SV-COMP reports a violation of it: a
+// memory-safety subproperty without the enclosing valid-memsafety, e.g.
+// "valid-deref".
+func (p Property) Name() string {
+	if sub, ok := strings.CutPrefix(string(p), "valid-memsafety("); ok {
+		return strings.TrimSuffix(sub, ")")
+	}
+	return string(p)
+}
+
 // ParseFile parses the content of a property file: one CHECK expression per
 // nonblank line. Order and duplicates are preserved.
 func ParseFile(content string) ([]Property, error) {
