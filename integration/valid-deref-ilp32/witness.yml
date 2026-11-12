@@ -1,0 +1,21 @@
+# A program without nondeterministic input: the witness consists of the target only.
+# The out-of-bounds write happens only in the ILP32 data model.
+
+- entry_type: violation_sequence
+  metadata:
+    format_version: "2.4"
+    uuid: 00000000-0000-0000-0000-000000000104
+    creation_time: '2026-01-01T00:00:00Z'
+    producer: { name: test-fixture, version: '0' }
+    task:
+      input_files: [ program.c ]
+      input_file_hashes: { program.c: deadbeef }
+      specification: "G valid-deref"
+      data_model: ILP32
+      language: C
+  content:
+  - segment:
+    - waypoint:
+        action: follow
+        location: { file_name: program.c, line: 6, column: 5 }
+        type: target

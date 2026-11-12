@@ -1,8 +1,9 @@
 /* Minimal harness for witness2test-match instrumented programs.
  *
  * Provides:
- *   - reach_error(): exits with exitcodes.ViolationReached (213) so
- *     execution/ can detect that the witnessed violation point was hit.
+ *   - reach_error(): prints a message and exits with
+ *     exitcodes.ViolationReached (213) so execution/ can detect that the
+ *     witnessed violation point was hit.
  *   - Weak default __VERIFIER_nondet_*() implementations returning 0,
  *     so unwitnessed call sites still link.
  *
@@ -11,8 +12,14 @@
  */
 
 extern void _Exit(int);
+extern __PTRDIFF_TYPE__ write(int, const void *, __SIZE_TYPE__);
 
-__attribute__((weak)) void reach_error(void) { _Exit(213); }
+/* The message is required by execution/ in addition to the exit code. */
+__attribute__((weak)) void reach_error(void) {
+  static const char msg[] = "witness2test-match: reach_error called\n";
+  write(2, msg, sizeof(msg) - 1);
+  _Exit(213);
+}
 
 __attribute__((weak)) int __VERIFIER_nondet_int(void) { return 0; }
 __attribute__((weak)) unsigned int __VERIFIER_nondet_uint(void) { return 0; }
@@ -32,3 +39,248 @@ __attribute__((weak)) void *__VERIFIER_nondet_pointer(void) { return (void *)0; 
 
 /* SV-COMP convenience: __VERIFIER_assert in case the program uses it. */
 __attribute__((weak)) void __VERIFIER_assert(int cond) { if (!cond) reach_error(); }
+
+/* valid-memtrack: the leak sanitizer does the work, with one correction. It
+ * does not accept a pointer to the first address after a block as a
+ * reference to that block, but the property does. Before the leak check
+ * runs, the blocks that are reachable only through such pointers are
+ * therefore marked as not leaked.
+ */
+#ifdef W2T_CHECK_MEMTRACK
+typedef __SIZE_TYPE__ __w2t_mt_size_t;
+typedef __UINTPTR_TYPE__ __w2t_uintptr_t;
+extern void *malloc(__w2t_mt_size_t);
+extern void free(void *);
+extern int atexit(void (*)(void));
+extern char __data_start[], _end[];
+extern void *__libc_stack_end;
+extern void __lsan_ignore_object(const void *);
+extern void *__asan_get_current_fake_stack(void);
+extern void *__asan_addr_is_in_fake_stack(void *fake_stack, void *addr, void **beg, void **end);
+/* Not in the sanitizer runtimes before GCC 14; without them there is no
+ * correction. */
+extern const void *__sanitizer_get_allocated_begin(const void *) __attribute__((weak));
+extern __w2t_mt_size_t __sanitizer_get_allocated_size(const void *) __attribute__((weak));
+
+/* The blocks found reachable so far; each is scanned once. Addresses are
+ * stored inverted, so that the list itself is no reference to the blocks.
+ * If the list is full, further blocks are not followed: blocks reachable
+ * only through them may then still be reported. */
+#define W2T_MAX_REACHABLE 16384
+struct __w2t_reachable { __w2t_uintptr_t *hidden; __w2t_mt_size_t count; };
+
+__attribute__((no_sanitize_address))
+static void __w2t_note_value(struct __w2t_reachable *found, __w2t_uintptr_t value) {
+  if (value == 0) return;
+  /* The lookup also answers for addresses near a block (alignment padding,
+   * redzones), so the bounds are checked here. */
+  const void *begin = __sanitizer_get_allocated_begin((const void *)value);
+  if (!begin || value < (__w2t_uintptr_t)begin ||
+      value >= (__w2t_uintptr_t)begin + __sanitizer_get_allocated_size(begin)) {
+    /* Not a pointer into a block: is it one to the first address after one? */
+    begin = __sanitizer_get_allocated_begin((const void *)(value - 1));
+    if (!begin || (__w2t_uintptr_t)begin + __sanitizer_get_allocated_size(begin) != value) return;
+    __lsan_ignore_object(begin);
+  }
+  for (__w2t_mt_size_t i = 0; i < found->count; i++) {
+    if (found->hidden[i] == ~(__w2t_uintptr_t)begin) return;
+  }
+  if (found->count < W2T_MAX_REACHABLE) found->hidden[found->count++] = ~(__w2t_uintptr_t)begin;
+}
+
+/* Reads memory that the address sanitizer guards (redzones), hence the
+ * attribute. */
+__attribute__((no_sanitize_address))
+static void __w2t_scan(struct __w2t_reachable *found, __w2t_uintptr_t low, __w2t_uintptr_t high) {
+  const __w2t_uintptr_t word = sizeof(__w2t_uintptr_t);
+  low = (low + word - 1) / word * word;
+  for (__w2t_uintptr_t address = low; address + word <= high; address += word) {
+    __w2t_note_value(found, *(const __w2t_uintptr_t *)address);
+  }
+}
+
+/* The stack of the main thread from low on. With use-after-return
+ * detection, the address sanitizer keeps the local variables of a function
+ * in a separate "fake" frame that the real frame points to; those are
+ * scanned as well. */
+__attribute__((no_sanitize_address))
+static void __w2t_scan_stack(struct __w2t_reachable *found, __w2t_uintptr_t low) {
+  const __w2t_uintptr_t word = sizeof(__w2t_uintptr_t);
+  __w2t_uintptr_t high = (__w2t_uintptr_t)__libc_stack_end;
+  void *fake_stack = __asan_get_current_fake_stack();
+  __w2t_scan(found, low, high);
+  if (!fake_stack) return;
+  low = (low + word - 1) / word * word;
+  for (__w2t_uintptr_t address = low; address + word <= high; address += word) {
+    /* Instrumented code keeps the address of the end of its fake frame, so
+     * the address before the value is looked up as well. */
+    for (__w2t_uintptr_t back = 0; back <= 1; back++) {
+      void *begin = 0, *end = 0;
+      __w2t_uintptr_t value = *(const __w2t_uintptr_t *)address;
+      if (value > back && __asan_addr_is_in_fake_stack(fake_stack, (void *)(value - back), &begin, &end)) {
+        __w2t_scan(found, (__w2t_uintptr_t)begin, (__w2t_uintptr_t)end);
+      }
+    }
+  }
+}
+
+__attribute__((no_sanitize_address, noinline))
+static void __w2t_keep_blocks_referenced_by_end(void) {
+  struct __w2t_reachable found;
+  found.count = 0;
+  found.hidden = malloc(W2T_MAX_REACHABLE * sizeof(__w2t_uintptr_t));
+  if (!found.hidden) return;
+  /* Roots: the global variables and the stack above this function. Its own
+   * variables must stay out: they hold the addresses being looked for. */
+  __w2t_scan(&found, (__w2t_uintptr_t)__data_start, (__w2t_uintptr_t)_end);
+  __w2t_scan_stack(&found, (__w2t_uintptr_t)__builtin_frame_address(0));
+  for (__w2t_mt_size_t i = 0; i < found.count; i++) {
+    __w2t_uintptr_t begin = ~found.hidden[i];
+    if (begin == (__w2t_uintptr_t)found.hidden) continue;
+    __w2t_scan(&found, begin, begin + __sanitizer_get_allocated_size((const void *)begin));
+  }
+  free(found.hidden);
+}
+
+/* Overwrites the unused stack below the caller. The leak check runs later at
+ * about this stack depth and treats every word there as a possible pointer;
+ * the addresses that the search above left behind would hide leaks. */
+__attribute__((no_sanitize_address, noinline))
+static void __w2t_scrub_unused_stack(void) {
+  volatile char unused[32768];
+  for (__w2t_mt_size_t i = 0; i < sizeof(unused); i++) unused[i] = 0;
+}
+
+/* Runs at normal termination before the leak check, which the sanitizer
+ * registered earlier and which therefore runs later. */
+__attribute__((noinline)) static void __w2t_memtrack_at_exit(void) {
+  if (!__sanitizer_get_allocated_begin || !__sanitizer_get_allocated_size) return;
+  /* Puts the callee-saved registers into this frame, which the search scans:
+   * a pointer (or the address of a fake frame) may live only in a register. */
+  __builtin_unwind_init();
+  __w2t_keep_blocks_referenced_by_end();
+  __w2t_scrub_unused_stack();
+}
+
+__attribute__((constructor)) static void __w2t_register_memtrack(void) {
+  atexit(__w2t_memtrack_at_exit);
+}
+#endif
+
+/* valid-memcleanup: count the program's own allocations and report at
+ * termination if any are still live. Only compiled in when the property is
+ * checked; the allocation functions are then redirected here by the linker
+ * (-Wl,--wrap=...), so allocations made inside libc are not counted.
+ */
+#ifdef W2T_CHECK_MEMCLEANUP
+typedef __SIZE_TYPE__ __w2t_size_t;
+extern __w2t_size_t strlen(const char *);
+extern void *memcpy(void *, const void *, __w2t_size_t);
+
+extern void *__real_malloc(__w2t_size_t);
+extern void *__real_calloc(__w2t_size_t, __w2t_size_t);
+extern void *__real_realloc(void *, __w2t_size_t);
+extern void *__real_reallocarray(void *, __w2t_size_t, __w2t_size_t);
+extern void *__real_aligned_alloc(__w2t_size_t, __w2t_size_t);
+extern int __real_posix_memalign(void **, __w2t_size_t, __w2t_size_t);
+extern void __real_free(void *);
+extern void __real_abort(void) __attribute__((noreturn));
+extern void __real__Exit(int) __attribute__((noreturn));
+extern void __real__exit(int) __attribute__((noreturn));
+extern void __real___assert_fail(const char *, const char *, unsigned int, const char *) __attribute__((noreturn));
+
+/* Updated atomically: the program may allocate from several threads. */
+static long __w2t_live_allocations = 0;
+static void __w2t_allocated(void) { __atomic_add_fetch(&__w2t_live_allocations, 1, __ATOMIC_SEQ_CST); }
+static void __w2t_freed(void) { __atomic_sub_fetch(&__w2t_live_allocations, 1, __ATOMIC_SEQ_CST); }
+
+static void __w2t_check_memcleanup(void) {
+  if (__atomic_load_n(&__w2t_live_allocations, __ATOMIC_SEQ_CST) > 0) {
+    static const char msg[] = "witness2test-match: memory not deallocated at termination\n";
+    write(2, msg, sizeof(msg) - 1);
+    __real__Exit(216);
+  }
+}
+
+/* Runs at normal termination, after the program's exit handlers and after
+ * its destructors (destructors with a low priority number run last), so
+ * memory released there is not reported. */
+__attribute__((destructor(101))) static void __w2t_memcleanup_at_exit(void) {
+  __w2t_check_memcleanup();
+}
+
+void *__wrap_malloc(__w2t_size_t size) {
+  void *p = __real_malloc(size);
+  if (p) __w2t_allocated();
+  return p;
+}
+
+void *__wrap_calloc(__w2t_size_t n, __w2t_size_t size) {
+  void *p = __real_calloc(n, size);
+  if (p) __w2t_allocated();
+  return p;
+}
+
+void *__wrap_realloc(void *old, __w2t_size_t size) {
+  void *p = __real_realloc(old, size);
+  if (!old && p) __w2t_allocated();                /* behaves like malloc */
+  else if (old && !p && size == 0) __w2t_freed(); /* behaves like free */
+  return p;
+}
+
+void *__wrap_reallocarray(void *old, __w2t_size_t n, __w2t_size_t size) {
+  void *p = __real_reallocarray(old, n, size);
+  if (!old && p) __w2t_allocated();
+  else if (old && !p && (n == 0 || size == 0)) __w2t_freed();
+  return p;
+}
+
+void *__wrap_aligned_alloc(__w2t_size_t alignment, __w2t_size_t size) {
+  void *p = __real_aligned_alloc(alignment, size);
+  if (p) __w2t_allocated();
+  return p;
+}
+
+int __wrap_posix_memalign(void **out, __w2t_size_t alignment, __w2t_size_t size) {
+  int rc = __real_posix_memalign(out, alignment, size);
+  if (rc == 0 && *out) __w2t_allocated();
+  return rc;
+}
+
+char *__wrap_strdup(const char *s) {
+  __w2t_size_t n = strlen(s) + 1;
+  char *p = __wrap_malloc(n);
+  if (p) memcpy(p, s, n);
+  return p;
+}
+
+void __wrap_free(void *p) {
+  if (p) __w2t_freed();
+  __real_free(p);
+}
+
+/* Ways to terminate that skip the exit handlers. */
+void __wrap_abort(void) {
+  __w2t_check_memcleanup();
+  __real_abort();
+}
+
+void __wrap___assert_fail(const char *assertion, const char *file, unsigned int line, const char *function) {
+  __w2t_check_memcleanup();
+  __real___assert_fail(assertion, file, line, function);
+}
+
+/* Exit codes 213 to 216 are how the test itself reports its outcome (see
+ * internal/exitcodes); they pass unchecked. */
+static int __w2t_is_tool_exit_code(int code) { return code >= 213 && code <= 216; }
+
+void __wrap__Exit(int code) {
+  if (!__w2t_is_tool_exit_code(code)) __w2t_check_memcleanup();
+  __real__Exit(code);
+}
+
+void __wrap__exit(int code) {
+  if (!__w2t_is_tool_exit_code(code)) __w2t_check_memcleanup();
+  __real__exit(code);
+}
+#endif

@@ -14,11 +14,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"witness2test/execution"
 	"witness2test/harness"
 	"witness2test/instrument"
+	"witness2test/property"
 	"witness2test/witness"
 )
 
@@ -88,26 +90,26 @@ func run(args []string, stdout, stderr *os.File) (int, string) {
 
 	verdict, instrumentedPath, derr := turnWitnessToTest(
 		*witnessPath, *programPath, tmpDir, *outputDir,
-		executionOptions{timeout: time.Duration(*timePerRun) * time.Second, model: model},
+		executionOptions{timeout: time.Duration(*timePerRun) * time.Second, model: model, properties: properties},
 	)
 	if derr != nil {
 		return 1, fmt.Sprintf("witness2test-match: %v", derr)
 	}
-	if _, err := fmt.Fprintln(stdout, formatVerdict(verdict, instrumentedPath, properties)); err != nil {
+	if _, err := fmt.Fprintln(stdout, formatVerdict(verdict, instrumentedPath)); err != nil {
 		return 1, fmt.Sprintf("witness2test-match: failed to write verdict: %v", err)
 	}
 	return 0, ""
 }
 
-func readProperties(propertyPath string) ([]property, error) {
+func readProperties(propertyPath string) ([]property.Property, error) {
 	if propertyPath == "" {
-		return []property{unreachCall}, nil
+		return []property.Property{property.UnreachCall}, nil
 	}
 	content, err := os.ReadFile(propertyPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read property file: %w", err)
 	}
-	properties, err := parseProperties(string(content))
+	properties, err := property.ParseFile(string(content))
 	if err != nil {
 		return nil, fmt.Errorf("property file %q: %w", propertyPath, err)
 	}
@@ -117,6 +119,53 @@ func readProperties(propertyPath string) ([]property, error) {
 type executionOptions struct {
 	timeout time.Duration
 	model   string
+	// properties are the properties selected on the command line.
+	properties []property.Property
+}
+
+// maxPrintedNotes bounds how many notes about unmatched waypoints are kept;
+// witnesses can carry hundreds of waypoints the tool does not interpret.
+const maxPrintedNotes = 10
+
+// resolveCheckedProperties determines which properties to check: those the
+// witness claims in its specification. The selected properties (from the
+// command line) must include every claimed property. A witness without a
+// recognizable specification is checked against the selected properties.
+func resolveCheckedProperties(selected []property.Property, specification string) (checked []property.Property, notes []string, err error) {
+	if strings.TrimSpace(specification) == "" {
+		return unique(selected), []string{"witness states no specification; checking the selected properties"}, nil
+	}
+	claimed, perr := property.ParseSpecification(specification)
+	if perr != nil {
+		return unique(selected), []string{fmt.Sprintf("witness specification %q is not recognized; checking the selected properties", specification)}, nil
+	}
+	if missing := property.MissingFrom(claimed, selected); len(missing) > 0 {
+		return nil, nil, fmt.Errorf("witness claims a violation of %s, which the selected properties (%s) do not include",
+			joinProperties(missing), joinProperties(unique(selected)))
+	}
+	return unique(claimed), nil, nil
+}
+
+func unique(properties []property.Property) []property.Property {
+	return property.MissingFrom(properties, nil)
+}
+
+func joinProperties(properties []property.Property) string {
+	names := make([]string, len(properties))
+	for i, p := range properties {
+		names[i] = string(p)
+	}
+	return strings.Join(names, ", ")
+}
+
+func unsupportedProperties(properties []property.Property) []property.Property {
+	var unsupported []property.Property
+	for _, p := range properties {
+		if !p.Supported() {
+			unsupported = append(unsupported, p)
+		}
+	}
+	return unsupported
 }
 
 // turnWitnessToTest executes the full pipeline and returns (verdict, instrumented-path, error).
@@ -134,33 +183,59 @@ func turnWitnessToTest(witnessPath, programPath, tempDir, outputDir string, opti
 	programSrc := string(programBytes)
 	programBasename := filepath.Base(programPath)
 
-	points, counts, err := witness.Parse(witnessBytes, programBasename)
+	parsed, err := witness.ParseWitness(witnessBytes, programBasename)
 	if err != nil {
 		return execution.Verdict{}, "", fmt.Errorf("witness parse: %w", err)
 	}
-	injections := witness.GroupByLocation(points)
-	sites := instrument.CollectNondetCalls(programSrc)
-	reachErrorSites := instrument.CollectReachErrorCalls(programSrc)
+	if parsed.ViolationSequences == 0 {
+		return execution.Verdict{}, "", fmt.Errorf("witness parse: the witness contains no violation_sequence entry")
+	}
+	selected := options.properties
+	if len(selected) == 0 {
+		selected = []property.Property{property.UnreachCall}
+	}
+	checked, notes, err := resolveCheckedProperties(selected, parsed.Specification)
+	if err != nil {
+		return execution.Verdict{}, "", err
+	}
+
+	if model := effectiveModel(options.model); parsed.DataModel != "" && parsed.DataModel != model {
+		// The caller's --model defines the task; the witness is only told apart.
+		notes = append(notes, fmt.Sprintf("witness states data model %s, but the test is built for %s (--model)", parsed.DataModel, model))
+	}
 
 	instrumentedPath := filepath.Join(outputDir, "instrumented_program.c")
-
-	if len(injections) == 0 {
-		// Always emit the program as-is so the path is meaningful even on the
-		// unsupported-witness path.
+	// stopEarly reports a verdict without executing anything. The program is
+	// still emitted as-is so the path in the verdict line is meaningful.
+	stopEarly := func(status execution.VerdictStatus, reason string) (execution.Verdict, string, error) {
 		if werr := os.WriteFile(instrumentedPath, programBytes, 0o644); werr != nil {
 			return execution.Verdict{}, instrumentedPath, fmt.Errorf("failed to write instrumented program: %w", werr)
 		}
-		return execution.Verdict{
-			Status: execution.WitnessUnsupported,
-			Stderr: fmt.Sprintf("witness has no function_return waypoints we can interpret (waypoints seen: %s)", counts.Summary()),
-		}, instrumentedPath, nil
+		return execution.Verdict{Status: status, Notes: append(notes, reason)}, instrumentedPath, nil
 	}
 
-	instrumented, err := instrument.Instrument(programSrc, injections, sites, reachErrorSites)
+	if unsupported := unsupportedProperties(checked); len(unsupported) > 0 {
+		return stopEarly(execution.PropertyUnsupported,
+			fmt.Sprintf("checking %s is not supported", joinProperties(unsupported)))
+	}
+
+	instrumented, err := instrument.InstrumentWitness(programSrc, parsed, instrument.Options{
+		RewriteReachError: property.Contains(checked, property.UnreachCall),
+		Model:             options.model,
+	})
 	if err != nil {
 		return execution.Verdict{}, "", fmt.Errorf("instrument: %w", err)
 	}
-	if werr := os.WriteFile(instrumentedPath, []byte(instrumented), 0o644); werr != nil {
+	notes = append(notes, limitNotes(instrumented.Notes)...)
+
+	// A program without nondeterministic calls needs no input values, so it
+	// can be executed even if the witness provides none.
+	if instrumented.InjectedSites == 0 && instrumented.NondetSites > 0 {
+		return stopEarly(execution.WitnessUnsupported,
+			fmt.Sprintf("witness provides no input values we can interpret (waypoints seen: %s)", parsed.Counts.Summary()))
+	}
+
+	if werr := os.WriteFile(instrumentedPath, []byte(instrumented.Source), 0o644); werr != nil {
 		return execution.Verdict{}, instrumentedPath, fmt.Errorf("failed to write instrumented program: %w", werr)
 	}
 
@@ -169,25 +244,99 @@ func turnWitnessToTest(witnessPath, programPath, tempDir, outputDir string, opti
 		return execution.Verdict{}, instrumentedPath, fmt.Errorf("failed to write harness: %w", herr)
 	}
 
-	binary, cerr := execution.Compile(instrumented, harnessPath, execution.CompileOptions{OutputDir: tempDir, Model: options.model})
+	binary, cerr := execution.Compile(instrumented.Source, harnessPath,
+		execution.CompileOptions{OutputDir: tempDir, Model: options.model, Properties: checked})
 	if cerr != nil {
 		return execution.Verdict{}, instrumentedPath, fmt.Errorf("compile: %w", cerr)
 	}
 
-	verdict, rerr := execution.Run(context.Background(), binary, options.timeout)
+	verdict, rerr := execution.Run(context.Background(), binary, options.timeout, checked)
+	verdict.Notes = append(notes, verdict.Notes...)
 	if rerr != nil {
 		return verdict, instrumentedPath, fmt.Errorf("run: %w", rerr)
 	}
+	if verdict.Status == execution.Confirmed && verdict.Violated == property.NoOverflow &&
+		execution.OverflowReportIsForRemainder(verdict.Stderr, instrumented.Source) {
+		verdict.Status = execution.NotConfirmed
+		verdict.Violated = ""
+		verdict.Notes = append(verdict.Notes, "the reported overflow is in a remainder operation, which no-overflow does not cover")
+	}
+	checkTargetLocation(&verdict, parsed.Targets, strings.Split(programSrc, "\n"))
 	return verdict, instrumentedPath, nil
 }
 
-func formatVerdict(v execution.Verdict, instrumentedPath string, properties []property) string {
+func effectiveModel(model string) string {
+	if model == "" {
+		return "LP64"
+	}
+	return model
+}
+
+func limitNotes(notes []string) []string {
+	if len(notes) <= maxPrintedNotes {
+		return notes
+	}
+	limited := append([]string{}, notes[:maxPrintedNotes]...)
+	return append(limited, fmt.Sprintf("... and %d more waypoints that were not matched", len(notes)-maxPrintedNotes))
+}
+
+// checkTargetLocation withdraws a confirmation if the violation was observed
+// outside the statement that the witness's target waypoint names. Only lines
+// are compared: the violation must be observed on the target's line, or on a
+// later line of the statement that starts there (see statementSpans). The
+// check is skipped where the line of the violation cannot be determined,
+// which includes valid-memtrack and valid-memcleanup.
+func checkTargetLocation(verdict *execution.Verdict, targets []witness.Location, programLines []string) {
+	if verdict.Status != execution.Confirmed || len(targets) == 0 {
+		return
+	}
+	line, found := execution.ViolationLine(verdict.Violated, verdict.Stderr)
+	if !found {
+		if verdict.Violated != property.ValidMemtrack && verdict.Violated != property.ValidMemcleanup {
+			verdict.Notes = append(verdict.Notes, "could not determine the line of the violation; the witness's target location was not checked")
+		}
+		return
+	}
+	targetLines := make([]string, len(targets))
+	for i, target := range targets {
+		if statementSpans(programLines, target.Line, line) {
+			return
+		}
+		targetLines[i] = fmt.Sprint(target.Line)
+	}
+	verdict.Notes = append(verdict.Notes, fmt.Sprintf("violation of %s observed at line %d, but the witness's target is at line %s",
+		verdict.Violated, line, strings.Join(targetLines, ", ")))
+	verdict.Status = execution.NotConfirmed
+	verdict.Violated = ""
+}
+
+// statementSpans reports whether a statement that starts on line from (1-based)
+// can extend to line to: that is, from <= to and none of the lines from
+// .. to-1 contains a ';', '{' or '}', which would end the statement. The test
+// is textual and errs on the side of "no": such a character inside a string,
+// a comment or a for header also counts.
+func statementSpans(lines []string, from, to int) bool {
+	if from < 1 || to > len(lines) || from > to {
+		return false
+	}
+	for line := from; line < to; line++ {
+		if strings.ContainsAny(lines[line-1], ";{}") {
+			return false
+		}
+	}
+	return true
+}
+
+func formatVerdict(v execution.Verdict, instrumentedPath string) string {
 	status := string(v.Status)
 	if v.Status == execution.Confirmed {
-		status += " " + string(properties[0])
+		status += " " + string(v.Violated)
 	}
 	msg := fmt.Sprintf("Verdict: %s (exit code %d). Instrumented program: %s",
 		status, v.ExitCode, instrumentedPath)
+	for _, note := range v.Notes {
+		msg += "\nNote: " + note
+	}
 	if v.Stderr != "" {
 		msg += "\n--- program stderr ---\n" + v.Stderr
 	}

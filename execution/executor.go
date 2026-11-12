@@ -21,7 +21,7 @@ import (
 	"syscall"
 	"time"
 
-	"witness2test/internal/exitcodes"
+	"witness2test/property"
 )
 
 // VerdictStatus enumerates the possible outcomes of running an instrumented test.
@@ -33,6 +33,9 @@ const (
 	NotConfirmed       VerdictStatus = "NotConfirmed"
 	Timeout            VerdictStatus = "Timeout"
 	WitnessUnsupported VerdictStatus = "WitnessUnsupported"
+	// PropertyUnsupported is produced upstream when the witness claims a
+	// property witness2test-match cannot check; nothing is executed.
+	PropertyUnsupported VerdictStatus = "PropertyUnsupported"
 )
 
 // Verdict captures the outcome of one Run.
@@ -40,11 +43,19 @@ type Verdict struct {
 	Status   VerdictStatus
 	ExitCode int
 	Stderr   string
+	// Violated is the property whose violation was observed; set only for
+	// status Confirmed.
+	Violated property.Property
+	// Notes are one-line explanations accompanying the status.
+	Notes []string
 }
 
 type CompileOptions struct {
 	OutputDir string
 	Model     string
+	// Properties are the properties to check; they select the sanitizers and
+	// harness features compiled into the test.
+	Properties []property.Property
 }
 
 // Compile compiles the instrumented program (programCode, fed via stdin) together
@@ -66,6 +77,7 @@ func Compile(programCode, harnessPath string, options CompileOptions) (string, e
 		"-Wno-attributes",
 		"-lm",
 	}
+	args = append(args, propertyCompilerArgs(options.Properties)...)
 	switch options.Model {
 	case "ILP32":
 		args = append(args, "-m32")
@@ -89,7 +101,10 @@ func Compile(programCode, harnessPath string, options CompileOptions) (string, e
 // The verdict status is derived from the program's exit code via the constants
 // in internal/exitcodes. Run never returns WitnessUnsupported — that status is
 // produced upstream when the witness has no extractable injection points.
-func Run(ctx context.Context, binary string, timeout time.Duration) (Verdict, error) {
+//
+// properties are the properties being checked: a violation is only confirmed
+// if it is a violation of one of them.
+func Run(ctx context.Context, binary string, timeout time.Duration, properties []property.Property) (Verdict, error) {
 	if err := checkNoLeadingDash(binary, "binary path"); err != nil {
 		return Verdict{}, err
 	}
@@ -100,7 +115,7 @@ func Run(ctx context.Context, binary string, timeout time.Duration) (Verdict, er
 	// Empty stdin: the instrumented program is not expected to read input.
 	cmd.Stdin = strings.NewReader("")
 	// Sanitized environment.
-	cmd.Env = []string{"PATH=/usr/bin:/bin", "LC_ALL=C"}
+	cmd.Env = append([]string{"PATH=/usr/bin:/bin", "LC_ALL=C"}, sanitizerEnvironment(properties)...)
 	cmd.SysProcAttr = sysProcAttr()
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -120,11 +135,11 @@ func Run(ctx context.Context, binary string, timeout time.Duration) (Verdict, er
 	case <-runCtx.Done():
 		if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
 			killProcessGroup(cmd.Process.Pid)
-			<-doneCh
+			<-doneCh //nolint:errcheck // the process was killed; its exit status carries no information
 			return Verdict{Status: Timeout, ExitCode: -1, Stderr: stderr.String()}, nil
 		}
 		killProcessGroup(cmd.Process.Pid)
-		<-doneCh
+		<-doneCh //nolint:errcheck // the process was killed; its exit status carries no information
 		return Verdict{Status: Timeout, ExitCode: -1, Stderr: stderr.String()}, runCtx.Err()
 	case waitErr = <-doneCh:
 	}
@@ -139,14 +154,17 @@ func Run(ctx context.Context, binary string, timeout time.Duration) (Verdict, er
 		}
 	}
 
-	status := NotConfirmed
-	switch exitCode {
-	case exitcodes.ViolationReached:
-		status = Confirmed
-	case exitcodes.WitnessInconsistent:
-		status = Inconsistent
+	result := classify(exitCode, stderr.String(), properties)
+	verdict := Verdict{
+		Status:   result.status,
+		ExitCode: exitCode,
+		Stderr:   stderr.String(),
+		Violated: result.violated,
 	}
-	return Verdict{Status: status, ExitCode: exitCode, Stderr: stderr.String()}, nil
+	if result.detail != "" {
+		verdict.Notes = []string{result.detail}
+	}
+	return verdict, nil
 }
 
 func checkNoLeadingDash(path, what string) error {

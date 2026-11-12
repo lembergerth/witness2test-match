@@ -1,0 +1,26 @@
+# The input is given by an assumption waypoint directly after the assignment from the nondet call.
+
+- entry_type: violation_sequence
+  metadata:
+    format_version: "2.4"
+    uuid: 00000000-0000-0000-0000-000000000107
+    creation_time: '2026-01-01T00:00:00Z'
+    producer: { name: test-fixture, version: '0' }
+    task:
+      input_files: [ program.c ]
+      input_file_hashes: { program.c: deadbeef }
+      specification: "G valid-memtrack"
+      data_model: LP64
+      language: C
+  content:
+  - segment:
+    - waypoint:
+        action: follow
+        constraint: { format: c_expression, value: "lose == 1" }
+        location: { file_name: program.c, line: 6, column: 3 }
+        type: assumption
+  - segment:
+    - waypoint:
+        action: follow
+        location: { file_name: program.c, line: 7, column: 5 }
+        type: target

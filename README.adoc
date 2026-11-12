@@ -15,13 +15,15 @@ that, when compiled and run, reproduce the violation described by the witness.
 
 Given a C program and a YAML violation witness in
 https://sosy-lab.gitlab.io/benchmarking/sv-witnesses/yaml/violation-witnesses.html[format version 2],
-witness2test-match extracts the sequence of nondeterministic input values implied by
-the witness's `function_return` waypoints and instruments the program so that
-each matched `__VERIFIER_nondet_X()` call site is replaced by a location-stamped
-injection function `__VERIFIER_nondet_value_injection_<line>_<col>()` that returns
-the witness-supplied values in document order. The instrumented program is
-compiled against a self-contained C harness and executed; reaching the witnessed
-violation point is observable as a process exit with a known status code.
+witness2test-match extracts the nondeterministic input values that the witness
+states and instruments the program so that each matched
+`__VERIFIER_nondet_X()` call site is replaced by a location-stamped injection
+function `__VERIFIER_nondet_value_injection_<line>_<col>()` that returns the
+witness-supplied values in document order. The instrumented program is compiled
+against a self-contained C harness, with the run-time checks needed for the
+property that the witness claims to be violated, and executed. A violation is
+observable as a process exit with a known status code, together with a report
+on the standard error stream that tells which property was violated.
 
 The approach mirrors the
 https://gitlab.com/sosy-lab/software/test-to-witness[test-to-witness] tool in the
@@ -35,10 +37,32 @@ papers for background.
 
 === System Requirements
 
+To build:
+
 * Go 1.24.3 or later
-* GCC
+
+To run (the tool compiles and executes a test for every witness):
+
+* GCC 14 or later with the address and undefined-behavior sanitizer runtimes
+  (`libasan`, `libubsan`; they ship with GCC on common distributions). Leak
+  detection is part of the address sanitizer. The tool is developed and tested
+  with GCC 15.
+* GNU ld or a compatible linker that supports `--wrap` (used for
+  `valid-memcleanup`).
+* The leak sanitizer (used for `valid-memtrack`) needs permission to use
+  `ptrace` on the test process; some container setups forbid this.
 * For `--model ILP32`: GCC support for `-m32`, 32-bit C development libraries,
-  and a system capable of running 32-bit executables
+  the 32-bit sanitizer runtimes, and a system capable of running 32-bit
+  executables. On Debian and Ubuntu these are the packages `gcc-multilib`,
+  `lib32asan8`, and `lib32ubsan1` (the number in the package name follows the
+  GCC version).
+
+To develop:
+
+* `golangci-lint` for `make lint`
+* `reuse` (with its `charset-normalizer` extra) for the license check
+  `reuse lint`
+* Python 3, `zip`, and `unzip` for `make archive-test`
 
 === Building
 
@@ -61,18 +85,37 @@ bin/witness2test-match \
 ----
 
 The instrumented program is always written to `output/instrumented_program.c`
-and named in the final verdict line.
+and named in the verdict line.
 
 === Verdicts
 
-* `Confirmed <property>` — the compiled instrumented program reached the witnessed
-  violation point.
-* `NotConfirmed` — the program completed without reaching the violation point.
+If the tool reaches a verdict, the first line of its output is
+`Verdict: <verdict> (exit code <N>). Instrumented program: <path>`,
+where `<N>` is the exit code of the executed test program (`-1` if it was
+killed by a signal or the timeout; `0` if nothing was executed).
+The line may be followed by lines starting with `Note:` that explain the
+verdict, and, after a line `--- program stderr ---`, by the standard error
+output of the executed test.
+
+The exit status of `witness2test-match` itself is `0` whenever a verdict is
+printed, whatever the verdict is. It is `1` for errors, in which case there is
+no verdict line and the message is on the standard error stream: unreadable or
+unparsable input files, a witness without a `violation_sequence` entry, a
+witness that claims a property outside the `--property` selection, or a
+program that does not compile. It is `2` for wrong command-line usage.
+
+* `Confirmed <property>` — the execution violated `<property>`, which is one of
+  the properties the witness claims to be violated, for example
+  `Confirmed valid-memsafety(valid-deref)`.
+* `NotConfirmed` — the execution did not violate a claimed property, or it
+  violated it at a different line than the target waypoint of the witness names.
 * `WitnessInconsistent` — a witnessed nondet call site was reached more times
   than the witness supplied values for; the witness is inconsistent with the
   program.
-* `WitnessUnsupported` — the witness contains no `function_return` waypoints we
-  can interpret (typical of witnesses that carry values via `assumption` only).
+* `WitnessUnsupported` — the program calls `__VERIFIER_nondet_X()`, but the
+  witness provides no input value that the tool can interpret.
+* `PropertyUnsupported` — the witness claims a violation of a property that the
+  tool can not check (`no-data-race`). Nothing is compiled or executed.
 * `Timeout` — execution exceeded `--time-per-run`.
 
 === Command Line Options
@@ -85,40 +128,174 @@ Run `witness2test-match --help` to see all available options.
 
 `--property <file>` selects the properties to validate. If omitted, the property
 defaults to `unreach-call`. The file accepts one `CHECK` expression per nonblank
-line and preserves their order:
+line:
 
-[cols="2,1",options="header"]
+[cols="2,1,1",options="header"]
 |===
-|Expression |Property
-|`CHECK( init(main()), LTL(G ! call(reach_error())) )` |`unreach-call`
-|`CHECK( init(main()), LTL(G valid-free) )` |`valid-memsafety(valid-free)`
-|`CHECK( init(main()), LTL(G valid-deref) )` |`valid-memsafety(valid-deref)`
-|`CHECK( init(main()), LTL(G valid-memtrack) )` |`valid-memsafety(valid-memtrack)`
-|`CHECK( init(main()), LTL(G ! overflow) )` |`no-overflow`
-|`CHECK( init(main()), LTL(G ! data-race) )` |`no-data-race`
-|`CHECK( init(main()), LTL(G valid-memcleanup) )` |`valid-memcleanup`
+|Expression |Property |Checked
+|`CHECK( init(main()), LTL(G ! call(reach_error())) )` |`unreach-call` |yes
+|`CHECK( init(main()), LTL(G valid-free) )` |`valid-memsafety(valid-free)` |yes
+|`CHECK( init(main()), LTL(G valid-deref) )` |`valid-memsafety(valid-deref)` |yes
+|`CHECK( init(main()), LTL(G valid-memtrack) )` |`valid-memsafety(valid-memtrack)` |yes
+|`CHECK( init(main()), LTL(G ! overflow) )` |`no-overflow` |yes
+|`CHECK( init(main()), LTL(G valid-memcleanup) )` |`valid-memcleanup` |yes
+|`CHECK( init(main()), LTL(G ! data-race) )` |`no-data-race` |no
 |===
 
 Whitespace around punctuation is optional. Within the LTL formula, `G` and `!`
 must be separated from their operands by whitespace. Identifiers and property
 names must remain intact. Empty files and unrecognized expressions are rejected.
 
-The tool retains every selected property. Checking additional property types
-is planned; execution currently detects only calls to `reach_error()`.
-For now, a confirmed execution reports the first property in the file, for
-example `Verdict: Confirmed unreach-call (exit code 213). Instrumented program: output/instrumented_program.c`.
+=== Which Property Is Checked
 
-== Scope and limitations (v1)
+The tool checks the properties that the *witness* claims to be violated
+(`metadata.task.specification`, either as full `CHECK` expressions or as bare
+LTL formulas such as `G ! overflow`, one per line). The properties selected
+with `--property` must include every property that the witness claims;
+otherwise the tool stops with an error. This makes it possible to pass the
+complete `valid-memsafety.prp` of a task while the witness claims only
+`valid-deref`: then only `valid-deref` is checked, and an execution that
+violates `valid-free` instead is `NotConfirmed`.
 
-* Only `function_return` waypoints with constraints of the form
-  `\result == <literal>` are interpreted. `assumption` waypoints are not.
-* The column field in the witness is assumed to mark the closing parenthesis of
-  the call expression (the convention used by Symbiotic). Witnesses produced
-  with a different column convention may not match.
-* Only single-line `__VERIFIER_nondet_X()` calls are recognized.
-* Witness `constraint.value` is restricted to integer / float / character /
-  boolean literals; any other content is rejected at parse time as a security
-  measure.
+If the witness states no specification, or one that the tool does not
+recognize, the selected properties are checked and a note is printed.
+
+=== How Violations Are Detected
+
+[cols="1,3",options="header"]
+|===
+|Property |Detection
+|`unreach-call`
+|Calls to `reach_error()` in the program are redirected to a function that
+ exits with status 213.
+|`no-overflow`
+|GCC's undefined-behavior sanitizer (`signed-integer-overflow`, `shift-base`).
+ Only reports for results that can not be represented in the signed result type
+ count: addition, subtraction, multiplication, negation, division, and left
+ shift. Not counted, in line with the definition of the property: conversions
+ to signed types, `abs(INT_MIN)` and its variants, `INT_MIN % -1`, a left shift
+ of a negative value, and a shift by more bits than the type has. A left shift
+ of a negative value still ends the test (the sanitizer check for shifts can
+ not tell the two cases apart before it stops), so an overflow that would
+ happen later in the same execution is not seen.
+|`valid-free`
+|Address sanitizer: double free, free of memory that was not allocated with
+ `malloc` (stack, global, `alloca`), free of a pointer into the middle of a
+ block.
+|`valid-deref`
+|Address sanitizer: access outside of a heap, stack, or global object, use
+ after free, use after return or scope, and segmentation faults such as a
+ null-pointer dereference.
+|`valid-memtrack`
+|Leak sanitizer, corrected for pointers to the end of a block (see below):
+ memory that is no longer reachable when the program ends
+ through `return` from `main` or `exit`. No check takes place if the program
+ ends through `abort`, `_Exit`, `_exit`, or a failed `assert`.
+|`valid-memcleanup`
+|The program's calls to `malloc`, `calloc`, `realloc`, `aligned_alloc`,
+ `posix_memalign`, `strdup`, and `free` are counted (linker option `--wrap`).
+ The violation is reported if allocations are still live when the program
+ terminates through `return` from `main`, `exit`, `_Exit`, `_exit`, `abort`,
+ or a failed `assert`; on normal termination the check runs after the exit
+ handlers and destructors of the program. Memory that is allocated or released
+ by other library functions is not counted.
+|===
+
+A violation is only confirmed if the test ends with the exit code that the
+check uses *and* the matching report is on the standard error stream. A
+program that deliberately prints such a report and exits with that code can
+therefore fake a confirmation; the program is trusted in this respect.
+
+The sanitizers stop the test at the first error. They are a best-effort
+approximation of the SV-COMP definitions: the tool only confirms what the
+execution actually shows, so imprecision leads to `NotConfirmed`, for example
+for an access that is out of bounds of a struct member but inside the struct,
+for a leaked block whose address happens to remain in a dead stack slot, for
+the use of `alloca` memory after its function returned, or for an overflow in
+a constant expression such as `2147483647 + 1`, which the compiler evaluates
+before any run-time check exists.
+
+For `valid-memtrack`, the definition counts a pointer to the first address
+*after* a block as a reference to that block; the leak sanitizer does not. The
+harness therefore searches the memory reachable from global variables and the
+stack of the main thread before the leak check and exempts the blocks that are
+referenced in this way. This needs the sanitizer runtime of GCC 14 or later;
+with an older runtime such a block is reported as leaked.
+
+=== Target Location
+
+If the witness has a target waypoint, a violation of `unreach-call`,
+`no-overflow`, `valid-free`, or `valid-deref` is only confirmed if it is
+observed on the line that the target waypoint names, or on a later line of the
+statement that starts there (no `;`, `{`, or `}` in between). Only lines are
+compared, not columns. Lines are physical lines of the input file; linemarkers and
+`#line` directives in the program are ignored, as the witness format requires.
+If the line of the violation can not be determined, the violation is confirmed
+and a note is printed. The target is not checked for `valid-memtrack` and
+`valid-memcleanup`, because their reports do not name the violating statement.
+
+=== Where Input Values Come From
+
+For each `__VERIFIER_nondet_X()` call site, the tool uses the first of the
+following sources that the witness provides for it, and never mixes sources for
+one call site. All waypoints must have the action `follow`. Values are consumed
+in the order of the waypoints in the witness, one per call.
+
+. `function_return` waypoints with a constraint `\result == <literal>`, located
+  at the closing parenthesis of the call.
+. `assumption` waypoints with a constraint that is exactly `x == <literal>` (or
+  `<literal> == x`), if the statement directly before the waypoint's location is
+  exactly `x = __VERIFIER_nondet_X();` or `<type> x = __VERIFIER_nondet_X();`,
+  and that statement is not the body of an `if`, `else`, or loop without braces
+  and does not follow a label. An assumption that is placed later in the program
+  is not used.
+. `branching` waypoints on an `if`, `while`, `for`, `do`-`while`, `switch`, or
+  conditional operator (`?:`) whose controlling expression is exactly one of
+  `__VERIFIER_nondet_X()`, `!__VERIFIER_nondet_X()`, or
+  `__VERIFIER_nondet_X() <op> <integer>` (also mirrored) with a comparison
+  operator and a decimal integer literal without suffix (not `0x10`, `3U`, or
+  a character constant). The call returns a value that leads to the outcome that the
+  waypoint states; for `switch`, the integer constant of the waypoint. If a
+  required value does not exist in the type of the call, or a waypoint of a
+  `switch` says `default`, the statement is not used.
+
+Controlling expressions that combine a nondet call with `&&` or `||` are
+deliberately not used: the witness does not tell which operand decided the
+outcome. A controlling expression that contains a comment, a string, or
+a character constant is not used either, and neither is the condition of a
+conditional operator that starts its line (it may continue the line before).
+
+A program that contains no `__VERIFIER_nondet_X()` call needs no input values
+and is executed even if the witness consists of a target waypoint only.
+
+As soon as the witness provides a value for at least one call site, the test is
+executed, and every `__VERIFIER_nondet_X()` call site without a value from the
+witness returns `0`. A violation can therefore be confirmed on an execution
+that uses the value `0` for inputs that the witness leaves open.
+
+The data model is taken from `--model`. If the witness states a different one,
+a note is printed.
+
+== Scope and limitations
+
+* `no-data-race` is not checked.
+* Waypoints are matched textually, without parsing C. The witness's column for
+  a `function_return` waypoint is assumed to mark the closing parenthesis of the
+  call expression. Only single-line `__VERIFIER_nondet_X()` calls and
+  single-line controlling expressions are recognized. Likewise, only a
+  `reach_error()` call written on one line is redirected; a call that is split
+  over lines or made through a function pointer reaches the program's own
+  `reach_error` and is not detected.
+* Values are assigned to the calls of a call site in the order of the waypoints
+  in the witness. A witness that leaves out some evaluations of a call site
+  inside a loop is therefore not replayed faithfully.
+* A `function_return` waypoint whose location is not a
+  `__VERIFIER_nondet_X()` call provides no input value; a note names it.
+* Witness values are restricted to integer / float / character / boolean
+  literals of at most 64 characters; any other content in a value position is rejected or ignored, as a
+  security measure against code injection.
+* The test is executed with a wall-clock timeout, but without further
+  sandboxing.
 
 == Development and Testing
 
@@ -129,6 +306,12 @@ make lint
 make integration-test
 make archive-test
 ----
+
+`make test` and `make integration-test` compile and run small C programs for
+every supported property in both data models, so they need the run-time
+requirements listed above; test cases for the ILP32 data model are skipped by
+`make test` if a 32-bit sanitizer build is not possible. New behavior is
+developed test-first.
 
 `make archive-test` requires Python 3, `zip`, and `unzip` in addition to the build
 dependencies. It builds the release archive, checks its layout, contents, and

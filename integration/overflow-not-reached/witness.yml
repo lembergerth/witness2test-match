@@ -1,0 +1,26 @@
+# The input 7 does not make the addition overflow.
+
+- entry_type: violation_sequence
+  metadata:
+    format_version: "2.4"
+    uuid: 00000000-0000-0000-0000-000000000102
+    creation_time: '2026-01-01T00:00:00Z'
+    producer: { name: test-fixture, version: '0' }
+    task:
+      input_files: [ program.c ]
+      input_file_hashes: { program.c: deadbeef }
+      specification: "G ! overflow"
+      data_model: LP64
+      language: C
+  content:
+  - segment:
+    - waypoint:
+        action: follow
+        constraint: { format: ext_c_expression, value: "\\result == 7" }
+        location: { file_name: program.c, line: 3, column: 33 }
+        type: function_return
+  - segment:
+    - waypoint:
+        action: follow
+        location: { file_name: program.c, line: 5, column: 3 }
+        type: target

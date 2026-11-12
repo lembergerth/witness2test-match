@@ -1,0 +1,20 @@
+# Data races are not checked: the tool reports this and stops before compiling anything.
+
+- entry_type: violation_sequence
+  metadata:
+    format_version: "2.4"
+    uuid: 00000000-0000-0000-0000-000000000110
+    creation_time: '2026-01-01T00:00:00Z'
+    producer: { name: test-fixture, version: '0' }
+    task:
+      input_files: [ program.c ]
+      input_file_hashes: { program.c: deadbeef }
+      specification: "G ! data-race"
+      data_model: LP64
+      language: C
+  content:
+  - segment:
+    - waypoint:
+        action: follow
+        location: { file_name: program.c, line: 3, column: 3 }
+        type: target

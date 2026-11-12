@@ -64,9 +64,10 @@ func TestBinaryILP32Violation(t *testing.T) {
 		model    string
 		verdict  string
 		exitCode int
+		stderr   string
 	}{
-		{"ILP32", "Confirmed unreach-call", 213},
-		{"LP64", "NotConfirmed", 0},
+		{"ILP32", "Confirmed unreach-call", 213, "--- program stderr ---\nwitness2test-match: reach_error called at line 6\n\n"},
+		{"LP64", "NotConfirmed", 0, "Note: witness states data model ILP32, but the test is built for LP64 (--model)\n"},
 	} {
 		t.Run(tt.model, func(t *testing.T) {
 			out := t.TempDir()
@@ -75,8 +76,8 @@ func TestBinaryILP32Violation(t *testing.T) {
 			if err != nil {
 				t.Fatalf("witness2test-match failed: %v\n%s", err, combined)
 			}
-			want := fmt.Sprintf("Verdict: %s (exit code %d). Instrumented program: %s\n",
-				tt.verdict, tt.exitCode, filepath.Join(out, "instrumented_program.c"))
+			want := fmt.Sprintf("Verdict: %s (exit code %d). Instrumented program: %s\n%s",
+				tt.verdict, tt.exitCode, filepath.Join(out, "instrumented_program.c"), tt.stderr)
 			if string(combined) != want {
 				t.Errorf("output = %q, want %q", combined, want)
 			}
@@ -88,21 +89,23 @@ func TestBinaryOnSymbioticExample(t *testing.T) {
 	bin := buildBinary(t)
 	witness := filepath.Join("testdata", "sv-witnesses", "examples", "unsafe-program-example.symbiotic.witness-2.0.yml")
 	program := filepath.Join("testdata", "sv-witnesses", "examples", "unsafe-program-example.c")
+	const unreach = "CHECK(init(main()),LTL(G ! call(reach_error())))"
+	const overflow = "CHECK(init(main()),LTL(G ! overflow))"
 	tests := []struct {
-		name     string
-		content  string
-		property string
+		name    string
+		content string
+		// claimRejected: the witness claims unreach-call, which the selected
+		// properties do not include.
+		claimRejected string
 	}{
-		{"default", "", "unreach-call"},
-		{"unreach-call", "CHECK( init(main()), LTL(G ! call(reach_error())) )", "unreach-call"},
+		{"default", "", ""},
+		{"unreach-call", "CHECK( init(main()), LTL(G ! call(reach_error())) )", ""},
+		{"multiple overflow first", overflow + "\n" + unreach, ""},
+		{"multiple unreach first", unreach + "\n" + overflow, ""},
 		{"valid-free", "CHECK( init(main()), LTL(G valid-free) )", "valid-memsafety(valid-free)"},
-		{"valid-deref", "CHECK( init(main()), LTL(G valid-deref) )", "valid-memsafety(valid-deref)"},
-		{"valid-memtrack", "CHECK( init(main()), LTL(G valid-memtrack) )", "valid-memsafety(valid-memtrack)"},
 		{"no-overflow", "CHECK( init(main()), LTL(G ! overflow) )", "no-overflow"},
 		{"no-data-race", "CHECK( init(main()), LTL(G ! data-race) )", "no-data-race"},
 		{"valid-memcleanup", "CHECK( init(main()), LTL(G valid-memcleanup) )", "valid-memcleanup"},
-		{"multiple overflow first", "CHECK(init(main()),LTL(G ! overflow))\nCHECK(init(main()),LTL(G ! call(reach_error())))", "no-overflow"},
-		{"multiple unreach first", "CHECK(init(main()),LTL(G ! call(reach_error())))\nCHECK(init(main()),LTL(G ! overflow))", "unreach-call"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -113,13 +116,21 @@ func TestBinaryOnSymbioticExample(t *testing.T) {
 				writeFile(t, path, tt.content)
 				args = append(args, "--property", path)
 			}
-			combined, err := exec.Command(bin, args...).CombinedOutput()
+			cmd := exec.Command(bin, args...)
+			combined, err := cmd.CombinedOutput()
+			if tt.claimRejected != "" {
+				want := fmt.Sprintf("witness2test-match: witness claims a violation of unreach-call, which the selected properties (%s) do not include\n", tt.claimRejected)
+				if cmd.ProcessState.ExitCode() != 1 || string(combined) != want {
+					t.Errorf("exit %d, output = %q; want exit 1, %q", cmd.ProcessState.ExitCode(), combined, want)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("witness2test-match failed: %v\n%s", err, combined)
 			}
-			want := fmt.Sprintf("Verdict: Confirmed %s (exit code 213). Instrumented program: %s\n", tt.property, filepath.Join(out, "instrumented_program.c"))
-			if string(combined) != want {
-				t.Errorf("output = %q, want %q", combined, want)
+			want := fmt.Sprintf("Verdict: Confirmed unreach-call (exit code 213). Instrumented program: %s\n", filepath.Join(out, "instrumented_program.c"))
+			if !strings.HasPrefix(string(combined), want) {
+				t.Errorf("output = %q, want prefix %q", combined, want)
 			}
 		})
 	}

@@ -226,8 +226,14 @@ func TestInstrumentRewritesReachError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Instrument: %v", err)
 	}
-	if !strings.Contains(out, "__VERIFIER_w2t_reach_error()") {
-		t.Error("instrumented source should contain the wrapper call")
+	// The call reports the line on which it ends up after macro expansion,
+	// which is the physical line because of the "#line 1" in front of the
+	// program.
+	if !strings.Contains(out, "\n#line 1\nvoid reach_error(){}\nint main(){ __VERIFIER_w2t_reach_error(__LINE__); return 0; }") {
+		t.Errorf("instrumented source should contain the wrapper call with __LINE__ after a '#line 1' line:\n%s", out)
+	}
+	if !strings.Contains(out, "void __VERIFIER_w2t_reach_error(int line)") {
+		t.Error("wrapper definition should take the line of the call")
 	}
 	if !strings.Contains(out, "_Exit(213)") {
 		t.Error("wrapper definition should call _Exit(213)")
@@ -259,3 +265,27 @@ func TestActualFunctionTypeFromShortName(t *testing.T) {
 	}
 }
 
+func TestInstrumentPutsLineDirectiveBetweenDefinitionsAndProgram(t *testing.T) {
+	src := "int main() {\n  int x = __VERIFIER_nondet_int();\n  return x;\n}\n"
+	sites := CollectNondetCalls(src)
+	out, err := Instrument(src, map[witness.Location][]string{{Line: 2, Column: 33}: {"42"}}, sites, nil)
+	if err != nil {
+		t.Fatalf("Instrument: %v", err)
+	}
+	want := "/* end of generated definitions */\n#line 1\nint main() {\n  int x = __VERIFIER_nondet_value_injection_2_33();\n  return x;\n}\n"
+	if !strings.HasSuffix(out, want) {
+		t.Errorf("output should end with the program after a '#line 1' line.\ngot:\n%s", out)
+	}
+}
+
+func TestInstrumentNeutralisesLineDirectives(t *testing.T) {
+	src := "# 1 \"a.c\"\nint main() {\n#line 50\n  return __VERIFIER_nondet_int();\n}\n"
+	out, err := Instrument(src, nil, CollectNondetCalls(src), nil)
+	if err != nil {
+		t.Fatalf("Instrument: %v", err)
+	}
+	want := "\nint main() {\n\n  return __VERIFIER_nondet_int();\n}\n"
+	if out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}

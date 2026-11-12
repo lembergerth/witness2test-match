@@ -8,8 +8,11 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Runs witness2test-match against every subdirectory of integration/ that has a
-# witness.yml, program.c, and expected-verdict file. Each expected-verdict
-# file contains the verdict string the binary's output is expected to contain.
+# witness.yml, a C program, and an expected-verdict file. Each expected-verdict
+# file contains the verdict string the binary's output is expected to contain,
+# e.g. "NotConfirmed" or "Confirmed no-overflow".
+# Optional per-case files: property.prp (passed as --property) and model
+# (containing ILP32 or LP64, passed as --model).
 
 set -u
 
@@ -34,9 +37,16 @@ for dir in integration/*/; do
     echo "skip: $name (missing required file)" >&2
     continue
   fi
-  expected="$(tr -d '[:space:]' < "$expected_file")"
+  expected="$(sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' "$expected_file" | tr -d '\n')"
+  extra_args=()
+  if [[ -f "$dir/property.prp" ]]; then
+    extra_args+=(--property "$dir/property.prp")
+  fi
+  if [[ -f "$dir/model" ]]; then
+    extra_args+=(--model "$(tr -d '[:space:]' < "$dir/model")")
+  fi
   outdir="$(mktemp -d "${TMPDIR:-/tmp}/witness2test-match-it-XXXXXX")"
-  output="$("$BIN" --witness "$witness" --program "$program" --output "$outdir" --time-per-run 10 2>&1)"
+  output="$("$BIN" --witness "$witness" --program "$program" --output "$outdir" --time-per-run 10 "${extra_args[@]}" 2>&1)"
   rc=$?
   if [[ $rc -ne 0 ]]; then
     echo "FAIL: $name (exit $rc)"
@@ -46,7 +56,7 @@ for dir in integration/*/; do
     rm -rf "$outdir"
     continue
   fi
-  if grep -q "Verdict: $expected" <<<"$output"; then
+  if grep -q "^Verdict: $expected (" <<<"$output"; then
     echo "PASS: $name ($expected)"
     passes=$((passes + 1))
   else

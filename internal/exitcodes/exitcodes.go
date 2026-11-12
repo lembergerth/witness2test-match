@@ -21,4 +21,13 @@ const (
 	// overflow branch when a witnessed nondet call site is called more times
 	// than the witness supplied values for.
 	WitnessInconsistent = 214
+
+	// SanitizerReport is the exit code the address, leak and undefined-behavior
+	// sanitizers are configured to use when they abort the test program. The
+	// kind of violation is read from the sanitizer's report on stderr.
+	SanitizerReport = 215
+
+	// MemcleanupViolation is emitted from the embedded harness when the program
+	// terminates while memory it allocated is still not deallocated.
+	MemcleanupViolation = 216
 )

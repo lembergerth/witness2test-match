@@ -1,0 +1,38 @@
+# Inputs are given by branching waypoints on a loop condition that compares a nondet call with a constant.
+
+- entry_type: violation_sequence
+  metadata:
+    format_version: "2.4"
+    uuid: 00000000-0000-0000-0000-000000000109
+    creation_time: '2026-01-01T00:00:00Z'
+    producer: { name: test-fixture, version: '0' }
+    task:
+      input_files: [ program.c ]
+      input_file_hashes: { program.c: deadbeef }
+      specification: "G ! call(reach_error())"
+      data_model: LP64
+      language: C
+  content:
+  - segment:
+    - waypoint:
+        action: follow
+        constraint: { value: "true" }
+        location: { file_name: program.c, line: 5, column: 3 }
+        type: branching
+  - segment:
+    - waypoint:
+        action: follow
+        constraint: { value: "true" }
+        location: { file_name: program.c, line: 5, column: 3 }
+        type: branching
+  - segment:
+    - waypoint:
+        action: follow
+        constraint: { value: "false" }
+        location: { file_name: program.c, line: 5, column: 3 }
+        type: branching
+  - segment:
+    - waypoint:
+        action: follow
+        location: { file_name: program.c, line: 9, column: 5 }
+        type: target

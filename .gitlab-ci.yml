@@ -29,7 +29,9 @@ archive-test:
   image: golang:1.24.3-bookworm
   before_script:
     - apt-get update
-    - apt-get install -y --no-install-recommends python3 zip unzip
+    # gcc-multilib provides the 32-bit toolchain and sanitizer runtimes that the
+    # smoke test needs for its ILP32 case.
+    - apt-get install -y --no-install-recommends python3 zip unzip gcc-multilib
   script:
     - make archive-test
 

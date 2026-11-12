@@ -19,9 +19,12 @@ import (
 	"time"
 
 	"witness2test/internal/exitcodes"
+	"witness2test/property"
 )
 
 var gccAvailable bool
+
+var unreach = []property.Property{property.UnreachCall}
 
 func TestMain(m *testing.M) {
 	if _, err := exec.LookPath("gcc"); err == nil {
@@ -49,7 +52,7 @@ func compileAndRun(t *testing.T, programCode string) Verdict {
 	if err != nil {
 		t.Fatalf("Compile: %v", err)
 	}
-	v, err := Run(context.Background(), binary, 5*time.Second)
+	v, err := Run(context.Background(), binary, 5*time.Second, unreach)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -57,7 +60,7 @@ func compileAndRun(t *testing.T, programCode string) Verdict {
 }
 
 func TestRunConfirmedFromExitCode(t *testing.T) {
-	src := fmt.Sprintf("extern void _Exit(int);\nint main(void){ _Exit(%d); return 0; }\n", exitcodes.ViolationReached)
+	src := fmt.Sprintf("#include <stdio.h>\nextern void _Exit(int);\nint main(void){ fputs(\"%s\\n\", stderr); _Exit(%d); return 0; }\n", reachErrorMarker, exitcodes.ViolationReached)
 	v := compileAndRun(t, src)
 	if v.Status != Confirmed || v.ExitCode != exitcodes.ViolationReached {
 		t.Errorf("got %+v", v)
@@ -99,7 +102,7 @@ func TestRunTimeoutKillsProgram(t *testing.T) {
 		t.Fatalf("Compile: %v", err)
 	}
 	start := time.Now()
-	v, err := Run(context.Background(), binary, 200*time.Millisecond)
+	v, err := Run(context.Background(), binary, 200*time.Millisecond, unreach)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -177,14 +180,14 @@ func TestCompileRejectsLeadingDashPaths(t *testing.T) {
 }
 
 func TestRunRejectsLeadingDashBinary(t *testing.T) {
-	_, err := Run(context.Background(), "-evil", time.Second)
+	_, err := Run(context.Background(), "-evil", time.Second, unreach)
 	if err == nil {
 		t.Error("Run should reject binary path starting with '-'")
 	}
 }
 
 func TestRunStartFailureSurfacesError(t *testing.T) {
-	_, err := Run(context.Background(), "/path/that/does/not/exist", time.Second)
+	_, err := Run(context.Background(), "/path/that/does/not/exist", time.Second, unreach)
 	if err == nil {
 		t.Error("Run should error when the binary does not exist")
 	}
@@ -207,7 +210,7 @@ func TestRunParentContextCanceled(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 		cancel()
 	}()
-	v, err := Run(ctx, binary, 10*time.Second)
+	v, err := Run(ctx, binary, 10*time.Second, unreach)
 	// Parent cancellation surfaces as either a Timeout verdict + non-nil error
 	// (context.Canceled) or a clean Timeout if the deadline was reached first.
 	if v.Status != Timeout {

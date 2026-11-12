@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"witness2test/execution"
+	"witness2test/property"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -136,11 +137,16 @@ const witnessAssumptionOnly = `- entry_type: "violation_sequence"
     - waypoint:
         type: "assumption"
         action: "follow"
-        constraint: { value: "x == 42", format: "c_expression" }
+        constraint: { value: "x >= 42", format: "c_expression" }
         location: { file_name: "program.c", line: 5, column: 3 }
 `
 
 func runPipeline(t *testing.T, programSrc, witnessSrc string) (execution.Verdict, string) {
+	t.Helper()
+	return runPipelineFor(t, programSrc, witnessSrc, "LP64", nil)
+}
+
+func runPipelineFor(t *testing.T, programSrc, witnessSrc, model string, properties []property.Property) (execution.Verdict, string) {
 	t.Helper()
 	dir := t.TempDir()
 	prog := filepath.Join(dir, "program.c")
@@ -151,7 +157,7 @@ func runPipeline(t *testing.T, programSrc, witnessSrc string) (execution.Verdict
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		t.Fatalf("mkdir output: %v", err)
 	}
-	v, instPath, err := turnWitnessToTest(wit, prog, dir, out, executionOptions{timeout: 5 * time.Second})
+	v, instPath, err := turnWitnessToTest(wit, prog, dir, out, executionOptions{timeout: 20 * time.Second, model: model, properties: properties})
 	if err != nil {
 		t.Fatalf("turnWitnessToTest: %v", err)
 	}
@@ -163,8 +169,8 @@ func runPipeline(t *testing.T, programSrc, witnessSrc string) (execution.Verdict
 
 func TestTurnWitnessToTestConfirmed(t *testing.T) {
 	v, _ := runPipeline(t, programWithSingleNondet, witnessHitsViolation)
-	if v.Status != execution.Confirmed {
-		t.Errorf("got %+v, want Confirmed", v)
+	if v.Status != execution.Confirmed || v.Violated != property.UnreachCall {
+		t.Errorf("got %+v, want Confirmed unreach-call", v)
 	}
 }
 
@@ -187,8 +193,8 @@ func TestTurnWitnessToTestUnsupported(t *testing.T) {
 	if v.Status != execution.WitnessUnsupported {
 		t.Errorf("got %+v, want WitnessUnsupported", v)
 	}
-	if !strings.Contains(v.Stderr, "assumption=1") {
-		t.Errorf("verdict diagnostic should summarize waypoints, got %q", v.Stderr)
+	if notes := strings.Join(v.Notes, "\n"); !strings.Contains(notes, "assumption=1") {
+		t.Errorf("verdict notes should summarize waypoints, got %q", notes)
 	}
 	// File must still be written for an unsupported witness.
 	got, err := os.ReadFile(instPath)
@@ -202,21 +208,20 @@ func TestTurnWitnessToTestUnsupported(t *testing.T) {
 
 func TestFormatVerdict(t *testing.T) {
 	tests := []struct {
-		name       string
-		verdict    execution.Verdict
-		properties []property
-		want       string
+		name    string
+		verdict execution.Verdict
+		want    string
 	}{
-		{"confirmed unreach", execution.Verdict{Status: execution.Confirmed, ExitCode: 213}, []property{unreachCall}, "Verdict: Confirmed unreach-call (exit code 213). Instrumented program: /tmp/x.c"},
-		{"confirmed first property", execution.Verdict{Status: execution.Confirmed, ExitCode: 213}, []property{"no-overflow", unreachCall}, "Verdict: Confirmed no-overflow (exit code 213). Instrumented program: /tmp/x.c"},
-		{"not confirmed", execution.Verdict{Status: execution.NotConfirmed}, []property{"no-overflow"}, "Verdict: NotConfirmed (exit code 0). Instrumented program: /tmp/x.c"},
-		{"inconsistent", execution.Verdict{Status: execution.Inconsistent, ExitCode: 214}, []property{unreachCall}, "Verdict: WitnessInconsistent (exit code 214). Instrumented program: /tmp/x.c"},
-		{"timeout", execution.Verdict{Status: execution.Timeout, ExitCode: -1}, []property{unreachCall}, "Verdict: Timeout (exit code -1). Instrumented program: /tmp/x.c"},
-		{"unsupported with stderr", execution.Verdict{Status: execution.WitnessUnsupported, Stderr: "diagnostic line"}, []property{unreachCall}, "Verdict: WitnessUnsupported (exit code 0). Instrumented program: /tmp/x.c\n--- program stderr ---\ndiagnostic line"},
+		{"confirmed unreach", execution.Verdict{Status: execution.Confirmed, ExitCode: 213, Violated: property.UnreachCall}, "Verdict: Confirmed unreach-call (exit code 213). Instrumented program: /tmp/x.c"},
+		{"confirmed subproperty", execution.Verdict{Status: execution.Confirmed, ExitCode: 215, Violated: property.ValidDeref}, "Verdict: Confirmed valid-memsafety(valid-deref) (exit code 215). Instrumented program: /tmp/x.c"},
+		{"not confirmed", execution.Verdict{Status: execution.NotConfirmed}, "Verdict: NotConfirmed (exit code 0). Instrumented program: /tmp/x.c"},
+		{"inconsistent", execution.Verdict{Status: execution.Inconsistent, ExitCode: 214}, "Verdict: WitnessInconsistent (exit code 214). Instrumented program: /tmp/x.c"},
+		{"timeout", execution.Verdict{Status: execution.Timeout, ExitCode: -1}, "Verdict: Timeout (exit code -1). Instrumented program: /tmp/x.c"},
+		{"notes and stderr", execution.Verdict{Status: execution.WitnessUnsupported, Notes: []string{"first", "second"}, Stderr: "diagnostic line"}, "Verdict: WitnessUnsupported (exit code 0). Instrumented program: /tmp/x.c\nNote: first\nNote: second\n--- program stderr ---\ndiagnostic line"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := formatVerdict(tt.verdict, "/tmp/x.c", tt.properties); got != tt.want {
+			if got := formatVerdict(tt.verdict, "/tmp/x.c"); got != tt.want {
 				t.Errorf("formatVerdict = %q, want %q", got, tt.want)
 			}
 		})
@@ -227,12 +232,12 @@ func TestReadProperties(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "properties.prp")
 	writeFile(t, path, "CHECK(init(main()),LTL(G valid-deref))\nCHECK(init(main()),LTL(G ! overflow))")
 	properties, err := readProperties(path)
-	want := []property{"valid-memsafety(valid-deref)", "no-overflow"}
+	want := []property.Property{property.ValidDeref, property.NoOverflow}
 	if err != nil || !reflect.DeepEqual(properties, want) {
 		t.Errorf("readProperties = %v, %v; want %v, nil", properties, err, want)
 	}
 	properties, err = readProperties("")
-	if err != nil || !reflect.DeepEqual(properties, []property{unreachCall}) {
+	if err != nil || !reflect.DeepEqual(properties, []property.Property{property.UnreachCall}) {
 		t.Errorf("default properties = %v, %v; want [unreach-call], nil", properties, err)
 	}
 }
@@ -477,17 +482,15 @@ func TestRunFullPipelineFailsOnBadWitness(t *testing.T) {
 	}
 }
 
-func TestTurnWitnessToTestRejectsMismatchedLocation(t *testing.T) {
-	prog := programWithSingleNondet
-	// Witness names a column that doesn't exist as a call site.
+// A function_return waypoint that is not on a nondet call provides no input.
+func TestTurnWitnessToTestNotesMismatchedLocation(t *testing.T) {
 	wit := strings.Replace(witnessHitsViolation, "column: 33", "column: 99", 1)
-	dir := t.TempDir()
-	progPath := filepath.Join(dir, "program.c")
-	witPath := filepath.Join(dir, "witness.yml")
-	writeFile(t, progPath, prog)
-	writeFile(t, witPath, wit)
-	_, _, err := turnWitnessToTest(witPath, progPath, dir, dir, executionOptions{timeout: time.Second})
-	if err == nil {
-		t.Error("expected error for location mismatch")
+	v, _ := runPipelineFor(t, programWithSingleNondet, wit, "ILP32", nil)
+	if v.Status != execution.WitnessUnsupported {
+		t.Fatalf("got %s, want WitnessUnsupported", v.Status)
+	}
+	want := "function_return at 4:99 (1 value) not matched: no __VERIFIER_nondet_X() call ends at the location"
+	if len(v.Notes) != 2 || v.Notes[0] != want {
+		t.Errorf("notes = %q, want first note %q", v.Notes, want)
 	}
 }

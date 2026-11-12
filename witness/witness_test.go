@@ -63,7 +63,8 @@ func TestParseRejectsHostileLiteral(t *testing.T) {
 	if !strings.Contains(err.Error(), "not an allowed C literal") {
 		t.Errorf("error should explain rejection: %v", err)
 	}
-	if !strings.Contains(err.Error(), "program.c:10:45") {
+	// The file name comes from the witness and is printed quoted.
+	if !strings.Contains(err.Error(), `"program.c":10:45`) {
 		t.Errorf("error should locate the offending waypoint: %v", err)
 	}
 }
@@ -79,7 +80,8 @@ func TestParseFiltersWaypointTypesAndActions(t *testing.T) {
 		{Loc: Location{Line: 18, Column: 33}, Value: "-3"},
 		{Loc: Location{Line: 22, Column: 33}, Value: "1.5f"},
 		{Loc: Location{Line: 24, Column: 33}, Value: "'A'"},
-		{Loc: Location{Line: 25, Column: 33}, Value: "true"},
+		// "\result == true": the generated C is compiled without <stdbool.h>.
+		{Loc: Location{Line: 25, Column: 33}, Value: "1"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v, want %+v", got, want)

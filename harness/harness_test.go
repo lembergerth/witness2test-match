@@ -36,7 +36,7 @@ func TestWriteHarnessFileWritesEmbeddedContent(t *testing.T) {
 
 func TestReachErrorExitsWithExitcodesValue(t *testing.T) {
 	// Pin the embedded harness's _Exit literal to exitcodes.ViolationReached.
-	re := regexp.MustCompile(`reach_error\s*\(\s*void\s*\)\s*\{\s*_Exit\((\d+)\)`)
+	re := regexp.MustCompile(`reach_error\s*\(\s*void\s*\)\s*\{[^}]*_Exit\((\d+)\)`)
 	m := re.FindStringSubmatch(Content())
 	if m == nil {
 		t.Fatal("could not find reach_error definition's _Exit(N) literal in harness template")
@@ -73,5 +73,16 @@ func TestHarnessProvidesCommonNondetVariants(t *testing.T) {
 		if !strings.Contains(Content(), name) {
 			t.Errorf("harness should provide a weak default for %s", name)
 		}
+	}
+}
+
+func TestMemcleanupExitsWithExitcodesValue(t *testing.T) {
+	re := regexp.MustCompile(`__w2t_check_memcleanup\(void\) \{[^}]*__real__Exit\((\d+)\)`)
+	m := re.FindStringSubmatch(Content())
+	if m == nil {
+		t.Fatal("could not find the memcleanup check's _Exit(N) literal in harness template")
+	}
+	if n, _ := strconv.Atoi(m[1]); n != exitcodes.MemcleanupViolation {
+		t.Errorf("memcleanup check exits with %d, want exitcodes.MemcleanupViolation (%d)", n, exitcodes.MemcleanupViolation)
 	}
 }
