@@ -236,6 +236,21 @@ func TestCompiledReachErrorWrapper(t *testing.T) {
 			wantStderr: "witness2test-match: reach_error called at line 3\n",
 		},
 		{
+			// SV-COMP programs (busybox, coreutils) define write() as a stub.
+			name: "program with its own write definition",
+			src: lines(
+				"extern void reach_error(void);",                                     // 1
+				"long write(int fd, const void *buf, unsigned long n) { return 0; }", // 2
+				"int main(void) {", // 3
+				"  reach_error();", // 4
+				"  return 0;",      // 5
+				"}",                // 6
+			),
+			rewrite:    true,
+			wantCode:   213,
+			wantStderr: "witness2test-match: reach_error called at line 4\n",
+		},
+		{
 			// The violation happens where the macro is expanded, not where
 			// it is defined.
 			name: "call in a macro reports the line of the expansion",
@@ -423,6 +438,25 @@ func TestGeneratedDeclarationsAgreeWithLibc(t *testing.T) {
 				t.Errorf("exit code %d, stderr %q", code, stderr)
 			}
 		})
+	}
+}
+
+func TestCompiledNondetOverflowWithProgramWrite(t *testing.T) {
+	src := lines(
+		"extern int __VERIFIER_nondet_int(void);",                            // 1
+		"long write(int fd, const void *buf, unsigned long n) { return 0; }", // 2
+		"int main(void) {",                     // 3
+		"  for (int i = 0; i < 2; i++) {",      // 4
+		"    int x = __VERIFIER_nondet_int();", // 5
+		"  }",                                  // 6
+		"  return 0;",                          // 7
+		"}",                                    // 8
+	)
+	w := &witness.Witness{Points: []witness.InjectionPoint{{Loc: witness.Location{Line: 5, Column: 35}, Value: "1"}}}
+	res := mustInstrument(t, src, w, Options{})
+	code, stderr := compileAndRun(t, res.Source)
+	if code != 214 || stderr != "witness2test-match: nondet overflow at 5:35\n" {
+		t.Errorf("exit code %d, stderr %q", code, stderr)
 	}
 }
 

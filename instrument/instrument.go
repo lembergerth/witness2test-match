@@ -423,10 +423,6 @@ func rewriteSource(source string, witnessed []witnessedSite, reachErrorSites []R
 
 // buildDefinitions returns the generated C definitions, or "" if there is
 // nothing to define.
-//
-// write is declared with the types the C library uses for ssize_t and size_t
-// in both data models. A fixed "long write(int, const void *, unsigned long)"
-// conflicts with the declaration of unistd.h for ILP32.
 func buildDefinitions(witnessed []witnessedSite, includeReachError bool) string {
 	if len(witnessed) == 0 && !includeReachError {
 		return ""
@@ -434,7 +430,7 @@ func buildDefinitions(witnessed []witnessedSite, includeReachError bool) string 
 	var b strings.Builder
 	b.WriteString("/* witness2test-match: generated definitions */\n")
 	b.WriteString("extern void _Exit(int);\n")
-	b.WriteString("extern __PTRDIFF_TYPE__ write(int, const void *, __SIZE_TYPE__);\n")
+	b.WriteString(syscallDeclarations)
 	if includeReachError {
 		b.WriteString(generateReachErrorWrapper())
 	}
@@ -445,13 +441,28 @@ func buildDefinitions(witnessed []witnessedSite, includeReachError bool) string 
 	return b.String()
 }
 
+// syscallDeclarations declares what the generated code needs to write
+// messages with the write system call. It does not call the write() function:
+// SV-COMP programs (busybox, coreutils) define their own write() stub. The
+// number of the system call is taken from the predefined macros of the
+// compiler because the definitions must not include headers in front of the
+// program.
+const syscallDeclarations = "extern long syscall(long, ...);\n" +
+	"#if defined(__x86_64__)\n" +
+	"#define __W2T_SYS_WRITE 1\n" +
+	"#elif defined(__i386__)\n" +
+	"#define __W2T_SYS_WRITE 4\n" +
+	"#else\n" +
+	"#error \"witness2test-match: unsupported architecture\"\n" +
+	"#endif\n"
+
 // generateReachErrorWrapper returns the definition of the function that
 // replaces reach_error(). It reports the line of the call (for a call in a
 // macro: the line of the macro expansion) on stderr, so that
 // the line can be compared with the target waypoint of the witness, and exits
 // with exitcodes.ViolationReached. The message is written with a single
-// write(2, ...) and the number is formatted by hand: stdio may not be usable
-// in the program under test.
+// write system call and the number is formatted by hand: stdio may not be
+// usable in the program under test.
 func generateReachErrorWrapper() string {
 	return fmt.Sprintf(
 		"void __VERIFIER_w2t_reach_error(int line) {\n"+
@@ -465,7 +476,7 @@ func generateReachErrorWrapper() string {
 			"  do { digits[ndigits++] = (char)('0' + value %% 10u); value /= 10u; } while (value != 0u);\n"+
 			"  while (ndigits > 0) { msg[len++] = digits[--ndigits]; }\n"+
 			"  msg[len++] = '\\n';\n"+
-			"  write(2, msg, len);\n"+
+			"  syscall(__W2T_SYS_WRITE, 2, msg, len);\n"+
 			"  _Exit(%d);\n"+
 			"}\n",
 		exitcodes.ViolationReached,
@@ -482,7 +493,7 @@ func generateInjectionFunction(s NondetCallSite, values []string) string {
 			"  static unsigned idx = 0;\n"+
 			"  if (idx >= sizeof(values)/sizeof(values[0])) {\n"+
 			"    const char msg[] = \"%[4]s\";\n"+
-			"    write(2, msg, sizeof(msg)-1);\n"+
+			"    syscall(__W2T_SYS_WRITE, 2, msg, sizeof(msg)-1);\n"+
 			"    _Exit(%[5]d);\n"+
 			"  }\n"+
 			"  return values[idx++];\n"+

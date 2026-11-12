@@ -202,7 +202,17 @@ func TestMemcleanup(t *testing.T) {
 		{"all freed before failed assertion", cleanupPrelude + "#include <assert.h>\nvolatile int zero = 0;\nint main(void){ keep = malloc(8); free(keep); assert(zero); return 0; }\n", ""},
 		{"free of null after free", cleanupPrelude + "int main(void){ keep = malloc(8); free(keep); keep = 0; free(keep); return 0; }\n", ""},
 		{"no allocation", cleanupPrelude + "int main(void){ return 3; }\n", ""},
+		{"memory kept, program defines write", cleanupPrelude + programWrite + "int main(void){ keep = malloc(8); return 0; }\n", property.ValidMemcleanup},
 	})
+}
+
+// SV-COMP programs (busybox, coreutils) define write() as a stub, which must
+// not swallow the reports of the harness.
+const programWrite = "long write(int fd, const void *buf, unsigned long n){ return 0; }\n"
+
+func TestUnreachCallWithProgramWrite(t *testing.T) {
+	program := "void reach_error(void);\n" + programWrite + "int main(void){ reach_error(); return 0; }\n"
+	checkPropertyCases(t, []property.Property{property.UnreachCall}, []propertyCase{{"harness reach_error", program, property.UnreachCall}})
 }
 
 func TestUnreachCallOnlyWhenSelected(t *testing.T) {

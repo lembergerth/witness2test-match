@@ -12,12 +12,21 @@
  */
 
 extern void _Exit(int);
-extern __PTRDIFF_TYPE__ write(int, const void *, __SIZE_TYPE__);
+/* Messages are written with the write system call, not with the write()
+ * function: SV-COMP programs (busybox, coreutils) define their own write() stub. */
+extern long syscall(long, ...);
+#if defined(__x86_64__)
+#define __W2T_SYS_WRITE 1
+#elif defined(__i386__)
+#define __W2T_SYS_WRITE 4
+#else
+#error "witness2test-match: unsupported architecture"
+#endif
 
 /* The message is required by execution/ in addition to the exit code. */
 __attribute__((weak)) void reach_error(void) {
   static const char msg[] = "witness2test-match: reach_error called\n";
-  write(2, msg, sizeof(msg) - 1);
+  syscall(__W2T_SYS_WRITE, 2, msg, sizeof(msg) - 1);
   _Exit(213);
 }
 
@@ -197,7 +206,7 @@ static void __w2t_freed(void) { __atomic_sub_fetch(&__w2t_live_allocations, 1, _
 static void __w2t_check_memcleanup(void) {
   if (__atomic_load_n(&__w2t_live_allocations, __ATOMIC_SEQ_CST) > 0) {
     static const char msg[] = "witness2test-match: memory not deallocated at termination\n";
-    write(2, msg, sizeof(msg) - 1);
+    syscall(__W2T_SYS_WRITE, 2, msg, sizeof(msg) - 1);
     __real__Exit(216);
   }
 }

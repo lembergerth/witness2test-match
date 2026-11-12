@@ -207,7 +207,7 @@ func TestInstrumentWitnessReachError(t *testing.T) {
 		for _, want := range []string{
 			"void __VERIFIER_w2t_reach_error(int line)",
 			"witness2test-match: reach_error called at line ",
-			"write(2, ",
+			"syscall(__W2T_SYS_WRITE, 2, ",
 			"_Exit(213);",
 		} {
 			if !strings.Contains(defs, want) {
