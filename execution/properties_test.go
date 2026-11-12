@@ -221,6 +221,21 @@ func TestUnreachCallOnlyWhenSelected(t *testing.T) {
 	checkPropertyCases(t, []property.Property{property.NoOverflow}, []propertyCase{{"not selected", program, ""}})
 }
 
+// A violation is only confirmed with complete witness values: a nondet call
+// without a witness value stops the test before the violation.
+func TestNondetCallWithoutWitnessValue(t *testing.T) {
+	program := "extern int __VERIFIER_nondet_int(void);\nvoid reach_error(void);\nint main(void){ if (__VERIFIER_nondet_int() == 0) reach_error(); return 0; }\n"
+	for _, model := range []string{"LP64", "ILP32"} {
+		t.Run(model, func(t *testing.T) {
+			v := runWithProperties(t, model, program, []property.Property{property.UnreachCall})
+			wantStderr := "witness2test-match: nondet call without witness value: __VERIFIER_nondet_int\n"
+			if v.Status != Inconsistent || v.Stderr != wantStderr {
+				t.Errorf("got %s (exit code %d), stderr %q; want WitnessInconsistent, stderr %q", v.Status, v.ExitCode, v.Stderr, wantStderr)
+			}
+		})
+	}
+}
+
 // The exit codes by which the test reports its own outcome must pass the
 // memcleanup check untouched.
 func TestMemcleanupKeepsToolExitCodes(t *testing.T) {

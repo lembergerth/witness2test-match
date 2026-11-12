@@ -86,3 +86,14 @@ func TestMemcleanupExitsWithExitcodesValue(t *testing.T) {
 		t.Errorf("memcleanup check exits with %d, want exitcodes.MemcleanupViolation (%d)", n, exitcodes.MemcleanupViolation)
 	}
 }
+
+func TestNondetDefaultExitsWithExitcodesValue(t *testing.T) {
+	re := regexp.MustCompile(`__w2t_nondet_without_value\(const char \*name\) \{[^}]*_Exit\((\d+)\)`)
+	m := re.FindStringSubmatch(Content())
+	if m == nil {
+		t.Fatal("could not find the _Exit(N) literal of the nondet defaults in harness template")
+	}
+	if n, _ := strconv.Atoi(m[1]); n != exitcodes.WitnessInconsistent {
+		t.Errorf("nondet defaults exit with %d, want exitcodes.WitnessInconsistent (%d)", n, exitcodes.WitnessInconsistent)
+	}
+}

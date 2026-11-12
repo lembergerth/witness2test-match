@@ -110,9 +110,9 @@ program that does not compile. It is `2` for wrong command-line usage.
   example `Confirmed valid-deref`.
 * `NotConfirmed` — the execution did not violate a claimed property, or it
   violated it at a different line than the target waypoint of the witness names.
-* `WitnessInconsistent` — a witnessed nondet call site was reached more times
-  than the witness supplied values for; the witness is inconsistent with the
-  program.
+* `WitnessInconsistent` — a nondet call was reached for which the witness
+  supplies no value (left): the witness supplies fewer values than the
+  program needs.
 * `WitnessUnsupported` — the program calls `__VERIFIER_nondet_X()`, but the
   witness provides no input value that the tool can interpret.
 * `PropertyUnsupported` — the witness claims a violation of a property that the
@@ -259,6 +259,11 @@ in the order of the waypoints in the witness, one per call.
   waypoint states; for `switch`, the integer constant of the waypoint. If a
   required value does not exist in the type of the call, or a waypoint of a
   `switch` says `default`, the statement is not used.
+
+A call for which no value is left stops the test with the verdict
+`WitnessInconsistent`. This also holds for a call site the witness gives no
+value for at all: a violation is only confirmed with the values of the witness,
+never with values the tool chooses itself.
 
 Controlling expressions that combine a nondet call with `&&` or `||` are
 deliberately not used: the witness does not tell which operand decided the

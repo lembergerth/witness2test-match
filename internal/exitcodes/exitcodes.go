@@ -17,9 +17,11 @@ const (
 	// when the program reaches the witnessed violation point.
 	ViolationReached = 213
 
-	// WitnessInconsistent is emitted from the generated injection function's
-	// overflow branch when a witnessed nondet call site is called more times
-	// than the witness supplied values for.
+	// WitnessInconsistent is emitted when a nondet call has no witness value
+	// left: from the generated injection function's overflow branch when a
+	// witnessed call site is called more times than the witness supplied
+	// values for, and from the embedded harness's default for a call site
+	// without witness values.
 	WitnessInconsistent = 214
 
 	// SanitizerReport is the exit code the address, leak and undefined-behavior

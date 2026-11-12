@@ -4,8 +4,9 @@
  *   - reach_error(): prints a message and exits with
  *     exitcodes.ViolationReached (213) so execution/ can detect that the
  *     witnessed violation point was hit.
- *   - Weak default __VERIFIER_nondet_*() implementations returning 0,
- *     so unwitnessed call sites still link.
+ *   - Weak default __VERIFIER_nondet_*() implementations that stop the test
+ *     with exitcodes.WitnessInconsistent (214): they are only called when
+ *     the witness supplies no value for a call.
  *
  * Definitions are __attribute__((weak)) so a program that provides its own
  * version (typical SV-COMP harness) silently wins at link time.
@@ -30,21 +31,36 @@ __attribute__((weak)) void reach_error(void) {
   _Exit(213);
 }
 
-__attribute__((weak)) int __VERIFIER_nondet_int(void) { return 0; }
-__attribute__((weak)) unsigned int __VERIFIER_nondet_uint(void) { return 0; }
-__attribute__((weak)) unsigned int __VERIFIER_nondet_unsigned(void) { return 0; }
-__attribute__((weak)) short __VERIFIER_nondet_short(void) { return 0; }
-__attribute__((weak)) unsigned short __VERIFIER_nondet_ushort(void) { return 0; }
-__attribute__((weak)) long __VERIFIER_nondet_long(void) { return 0; }
-__attribute__((weak)) unsigned long __VERIFIER_nondet_ulong(void) { return 0; }
-__attribute__((weak)) long long __VERIFIER_nondet_longlong(void) { return 0; }
-__attribute__((weak)) unsigned long long __VERIFIER_nondet_ulonglong(void) { return 0; }
-__attribute__((weak)) char __VERIFIER_nondet_char(void) { return 0; }
-__attribute__((weak)) unsigned char __VERIFIER_nondet_uchar(void) { return 0; }
-__attribute__((weak)) _Bool __VERIFIER_nondet_bool(void) { return 0; }
-__attribute__((weak)) float __VERIFIER_nondet_float(void) { return 0.0f; }
-__attribute__((weak)) double __VERIFIER_nondet_double(void) { return 0.0; }
-__attribute__((weak)) void *__VERIFIER_nondet_pointer(void) { return (void *)0; }
+/* A violation is only confirmed with the values of the witness. A call that
+ * reaches one of these defaults has no witness value left, so the test stops:
+ * the witness supplies fewer values than the program needs. */
+__attribute__((noreturn)) static void __w2t_nondet_without_value(const char *name) {
+  static const char prefix[] = "witness2test-match: nondet call without witness value: ";
+  __SIZE_TYPE__ length = 0;
+  while (name[length] != '\0') length++;
+  syscall(__W2T_SYS_WRITE, 2, prefix, sizeof(prefix) - 1);
+  syscall(__W2T_SYS_WRITE, 2, name, length);
+  syscall(__W2T_SYS_WRITE, 2, "\n", 1);
+  _Exit(214);
+}
+
+#define __W2T_NONDET_DEFAULT(type, name) \
+  __attribute__((weak)) type name(void) { __w2t_nondet_without_value(#name); }
+__W2T_NONDET_DEFAULT(int, __VERIFIER_nondet_int)
+__W2T_NONDET_DEFAULT(unsigned int, __VERIFIER_nondet_uint)
+__W2T_NONDET_DEFAULT(unsigned int, __VERIFIER_nondet_unsigned)
+__W2T_NONDET_DEFAULT(short, __VERIFIER_nondet_short)
+__W2T_NONDET_DEFAULT(unsigned short, __VERIFIER_nondet_ushort)
+__W2T_NONDET_DEFAULT(long, __VERIFIER_nondet_long)
+__W2T_NONDET_DEFAULT(unsigned long, __VERIFIER_nondet_ulong)
+__W2T_NONDET_DEFAULT(long long, __VERIFIER_nondet_longlong)
+__W2T_NONDET_DEFAULT(unsigned long long, __VERIFIER_nondet_ulonglong)
+__W2T_NONDET_DEFAULT(char, __VERIFIER_nondet_char)
+__W2T_NONDET_DEFAULT(unsigned char, __VERIFIER_nondet_uchar)
+__W2T_NONDET_DEFAULT(_Bool, __VERIFIER_nondet_bool)
+__W2T_NONDET_DEFAULT(float, __VERIFIER_nondet_float)
+__W2T_NONDET_DEFAULT(double, __VERIFIER_nondet_double)
+__W2T_NONDET_DEFAULT(void *, __VERIFIER_nondet_pointer)
 
 /* SV-COMP convenience: __VERIFIER_assert in case the program uses it. */
 __attribute__((weak)) void __VERIFIER_assert(int cond) { if (!cond) reach_error(); }

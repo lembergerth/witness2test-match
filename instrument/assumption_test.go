@@ -832,8 +832,8 @@ func TestCompiledAssumption(t *testing.T) {
 			"  return 3;",                             // 9
 			"}",                                       // 10
 		)
-		if code, _ := compileAndRun(t, src); code != 3 {
-			t.Fatalf("without witness: exit code %d, want 3", code)
+		if code, _ := compileAndRun(t, src); code != 214 {
+			t.Fatalf("without witness: exit code %d, want 214 (no witness value)", code)
 		}
 		w := &witness.Witness{Assumptions: []witness.Assumption{assume(6, 3, "1234")}}
 		res := mustInstrument(t, src, w, Options{RewriteReachError: true})

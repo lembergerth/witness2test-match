@@ -116,9 +116,11 @@ func TestCompiledProgramReportsPhysicalLines(t *testing.T) {
 		"  return __LINE__;",                      // 7
 		"}",                                       // 8
 	)
+	// The harness gives no value to a nondet call without a witness value.
+	deterministicSrc := strings.Replace(strings.Replace(src, "__VERIFIER_nondet_int()", "0", 1), "x != 42", "x != 0", 1)
 	t.Run("original program reports presumed lines", func(t *testing.T) {
 		// Sanity check of the test itself.
-		if code, _ := compileAndRun(t, strings.Replace(src, "x != 42", "x != 0", 1)); code == 7 {
+		if code, _ := compileAndRun(t, deterministicSrc); code == 7 {
 			t.Fatalf("exit code %d: the linemarkers of the test program have no effect", code)
 		}
 	})
@@ -133,7 +135,7 @@ func TestCompiledProgramReportsPhysicalLines(t *testing.T) {
 		}
 	})
 	t.Run("without generated definitions", func(t *testing.T) {
-		res := mustInstrument(t, strings.Replace(src, "x != 42", "x != 0", 1), &witness.Witness{}, Options{})
+		res := mustInstrument(t, deterministicSrc, &witness.Witness{}, Options{})
 		if code, stderr := compileAndRun(t, res.Source); code != 7 {
 			t.Errorf("exit code %d, want 7 (__LINE__ of the original line)\nstderr: %s\nsource:\n%s", code, stderr, res.Source)
 		}
