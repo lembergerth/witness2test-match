@@ -263,9 +263,9 @@ func TestRunRejectsInvalidPropertyFiles(t *testing.T) {
 			dir := t.TempDir()
 			path := filepath.Join(dir, "properties.prp")
 			writeFile(t, path, content)
-			wantMessage := fmt.Sprintf("witness2test-match: property file %q: property file contains no properties", path)
+			wantMessage := fmt.Sprintf("witness2test-match error: property file %q: property file contains no properties", path)
 			if content != "" {
-				wantMessage = fmt.Sprintf("witness2test-match: property file %q: line 1: unrecognized property expression %q", path, content)
+				wantMessage = fmt.Sprintf("witness2test-match error: property file %q: line 1: unrecognized property expression %q", path, content)
 			}
 			out := filepath.Join(dir, "out")
 			exit, msg := run([]string{"--witness", "unused.yml", "--program", "unused.c", "--property", path, "--output", out}, os.Stdout, os.Stderr)
@@ -286,7 +286,7 @@ func TestRunRejectsMissingPropertyFile(t *testing.T) {
 		t.Fatal("expected missing property file")
 	}
 	exit, msg := run([]string{"--witness", "unused.yml", "--program", "unused.c", "--property", path}, os.Stdout, os.Stderr)
-	wantMessage := fmt.Sprintf("witness2test-match: failed to read property file: %v", readErr)
+	wantMessage := fmt.Sprintf("witness2test-match error: failed to read property file: %v", readErr)
 	if exit != 1 || msg != wantMessage {
 		t.Errorf("run = %d, %q; want 1, %q", exit, msg, wantMessage)
 	}
@@ -313,7 +313,7 @@ func TestRunReportsVersionWriteError(t *testing.T) {
 	stdout := createClosedOutput(t)
 	exit, msg := run([]string{"--version"}, stdout, os.Stderr)
 	writeErr := &os.PathError{Op: "write", Path: stdout.Name(), Err: os.ErrClosed}
-	wantMessage := fmt.Sprintf("witness2test-match: failed to write version: %v", writeErr)
+	wantMessage := fmt.Sprintf("witness2test-match error: failed to write version: %v", writeErr)
 	if exit != 1 || msg != wantMessage {
 		t.Errorf("run = %d, %q; want 1, %q", exit, msg, wantMessage)
 	}
@@ -328,7 +328,7 @@ func TestRunReportsVerdictWriteError(t *testing.T) {
 	stdout := createClosedOutput(t)
 	exit, msg := run([]string{"--witness", wit, "--program", prog, "--output", filepath.Join(dir, "out")}, stdout, os.Stderr)
 	writeErr := &os.PathError{Op: "write", Path: stdout.Name(), Err: os.ErrClosed}
-	wantMessage := fmt.Sprintf("witness2test-match: failed to write verdict: %v", writeErr)
+	wantMessage := fmt.Sprintf("witness2test-match error: failed to write verdict: %v", writeErr)
 	if exit != 1 || msg != wantMessage {
 		t.Errorf("run = %d, %q; want 1, %q", exit, msg, wantMessage)
 	}
@@ -392,8 +392,9 @@ func TestRunRejectsUncreatableOutputDir(t *testing.T) {
 	writeFile(t, prog, programWithSingleNondet)
 	writeFile(t, wit, witnessHitsViolation)
 	exit, msg := run([]string{"--witness", wit, "--program", prog, "--output", output}, os.Stdout, os.Stderr)
-	if exit != 1 || !strings.Contains(msg, "output dir") {
-		t.Errorf("exit=%d msg=%q", exit, msg)
+	wantPrefix := fmt.Sprintf("witness2test-match error: failed to create output dir %s: ", output)
+	if exit != 1 || !strings.HasPrefix(msg, wantPrefix) {
+		t.Errorf("run = %d, %q; want 1, prefix %q", exit, msg, wantPrefix)
 	}
 }
 

@@ -131,7 +131,7 @@ func TestPipelineRejectsClaimOutsideSelection(t *testing.T) {
 	writeFile(t, prog, overflowProgram)
 	writeFile(t, wit, witnessFor("G ! overflow", returns(3, 33, "2147483647"), target(5, 3)))
 	exit, msg := run([]string{"--witness", wit, "--program", prog, "--output", out}, os.Stdout, os.Stderr)
-	want := "witness2test-match: witness claims a violation of no-overflow, which the selected properties (unreach-call) do not include"
+	want := "witness2test-match error: witness claims a violation of no-overflow, which the selected properties (unreach-call) do not include"
 	if exit != 1 || msg != want {
 		t.Errorf("run = %d, %q; want 1, %q", exit, msg, want)
 	}
@@ -430,16 +430,18 @@ func TestPipelineRejectsWitnessWithoutViolationSequence(t *testing.T) {
       specification: "G valid-deref"
   content: []
 `
-	for name, content := range map[string]string{"correctness witness": correctness, "empty list": "[]\n"} {
-		t.Run(name, func(t *testing.T) {
+	for _, tt := range []struct{ name, content, want string }{
+		{"correctness witness", correctness, `the witness contains no violation_sequence entry (found: "invariant_set")`},
+		{"empty list", "[]\n", "the witness contains no violation_sequence entry (found: no entries)"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
 			prog := filepath.Join(dir, "program.c")
 			wit := filepath.Join(dir, "witness.yml")
 			writeFile(t, prog, derefProgram)
-			writeFile(t, wit, content)
+			writeFile(t, wit, tt.content)
 			_, _, err := turnWitnessToTest(wit, prog, dir, dir, executionOptions{timeout: time.Second, properties: allMemsafety})
-			want := "witness parse: the witness contains no violation_sequence entry"
-			if err == nil || err.Error() != want {
+			if want := tt.want; err == nil || err.Error() != want {
 				t.Errorf("error = %v, want %q", err, want)
 			}
 		})
@@ -457,20 +459,43 @@ func TestPipelineRejectsWitnessWithoutTarget(t *testing.T) {
       specification: "G valid-deref"
   content: []
 `
-	for name, content := range map[string]string{
-		"empty content": emptyContent,
-		"no target":     witnessFor("G valid-deref", returns(2, 3, "0")),
+	for _, tt := range []struct{ name, content, want string }{
+		{"empty content", emptyContent, "the violation sequence has no target waypoint (found: no waypoints)"},
+		{"no target", witnessFor("G valid-deref", returns(2, 3, "0")), "the violation sequence has no target waypoint (found: function_return=1)"},
 	} {
-		t.Run(name, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
 			prog := filepath.Join(dir, "program.c")
 			wit := filepath.Join(dir, "witness.yml")
 			writeFile(t, prog, program)
-			writeFile(t, wit, content)
+			writeFile(t, wit, tt.content)
 			_, _, err := turnWitnessToTest(wit, prog, dir, dir, executionOptions{timeout: time.Second, properties: allMemsafety})
-			want := "witness parse: the violation sequence has no target waypoint"
-			if err == nil || err.Error() != want {
+			if want := tt.want; err == nil || err.Error() != want {
 				t.Errorf("error = %v, want %q", err, want)
+			}
+		})
+	}
+}
+
+// An invalid witness is reported with the tag "invalid witness" and the
+// details of the problem.
+func TestRunTagsInvalidWitness(t *testing.T) {
+	for _, tt := range []struct{ name, content, want string }{
+		{"syntax error", "not: [valid yaml", "witness2test-match error [invalid witness]: failed to parse witness YAML: yaml: "},
+		{"invalid location", witnessFor("G ! overflow", returns(0, 33, "1"), target(5, 3)),
+			`witness2test-match error [invalid witness]: witness waypoint at "program.c" has invalid 1-based location (line=0, column=33)`},
+		{"no target", witnessFor("G ! overflow", returns(3, 33, "1")),
+			"witness2test-match error [invalid witness]: the violation sequence has no target waypoint (found: function_return=1)"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			prog := filepath.Join(dir, "program.c")
+			wit := filepath.Join(dir, "witness.yml")
+			writeFile(t, prog, overflowProgram)
+			writeFile(t, wit, tt.content)
+			exit, msg := run([]string{"--witness", wit, "--program", prog, "--output", filepath.Join(dir, "out")}, os.Stdout, os.Stderr)
+			if exit != 1 || !strings.HasPrefix(msg, tt.want) {
+				t.Errorf("run = %d, %q; want 1, prefix %q", exit, msg, tt.want)
 			}
 		})
 	}

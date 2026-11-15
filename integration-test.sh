@@ -56,7 +56,7 @@ for dir in integration/*/; do
   output="$("$BIN" --witness "$witness" --program "$program" --output "$outdir" --time-per-run 10 "${extra_args[@]}" 2>&1)"
   rc=$?
   if $expect_error; then
-    if [[ $rc -eq 1 && "$output" == "witness2test-match: $expected" ]]; then
+    if [[ $rc -eq 1 && "$output" == "$expected" ]]; then
       echo "PASS: $name (error)"
       passes=$((passes + 1))
     else

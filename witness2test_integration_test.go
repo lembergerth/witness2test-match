@@ -119,7 +119,7 @@ func TestBinaryOnSymbioticExample(t *testing.T) {
 			cmd := exec.Command(bin, args...)
 			combined, err := cmd.CombinedOutput()
 			if tt.claimRejected != "" {
-				want := fmt.Sprintf("witness2test-match: witness claims a violation of unreach-call, which the selected properties (%s) do not include\n", tt.claimRejected)
+				want := fmt.Sprintf("witness2test-match error: witness claims a violation of unreach-call, which the selected properties (%s) do not include\n", tt.claimRejected)
 				if cmd.ProcessState.ExitCode() != 1 || string(combined) != want {
 					t.Errorf("exit %d, output = %q; want exit 1, %q", cmd.ProcessState.ExitCode(), combined, want)
 				}

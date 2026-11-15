@@ -1,1 +1,1 @@
-witness parse: the violation sequence has no target waypoint
+witness2test-match error [invalid witness]: the violation sequence has no target waypoint (found: no waypoints)

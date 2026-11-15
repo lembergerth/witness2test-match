@@ -10,6 +10,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -62,22 +63,22 @@ func run(args []string, stdout, stderr *os.File) (int, string) {
 	}
 	if *printVersion {
 		if _, err := fmt.Fprintf(stdout, "witness2test-match version %s\n", version); err != nil {
-			return 1, fmt.Sprintf("witness2test-match: failed to write version: %v", err)
+			return 1, errorMessage(fmt.Errorf("failed to write version: %w", err))
 		}
 		return 0, ""
 	}
 	if *witnessPath == "" || *programPath == "" {
 		fs.Usage()
-		return 2, "Error: both --witness and --program are required"
+		return 2, errorMessage(errors.New("both --witness and --program are required"))
 	}
 	properties, err := readProperties(*propertyPath)
 	if err != nil {
-		return 1, fmt.Sprintf("witness2test-match: %v", err)
+		return 1, errorMessage(err)
 	}
 
 	tmpDir, err := os.MkdirTemp("", "witness2test-match-")
 	if err != nil {
-		return 1, fmt.Sprintf("failed to create temp dir: %v", err)
+		return 1, errorMessage(fmt.Errorf("failed to create temp dir: %w", err))
 	}
 	defer func() {
 		// Temporary-file cleanup must not replace the execution verdict.
@@ -85,7 +86,7 @@ func run(args []string, stdout, stderr *os.File) (int, string) {
 	}()
 
 	if err := os.MkdirAll(*outputDir, 0o755); err != nil {
-		return 1, fmt.Sprintf("failed to create output dir %s: %v", *outputDir, err)
+		return 1, errorMessage(fmt.Errorf("failed to create output dir %s: %w", *outputDir, err))
 	}
 
 	verdict, instrumentedPath, derr := turnWitnessToTest(
@@ -93,10 +94,10 @@ func run(args []string, stdout, stderr *os.File) (int, string) {
 		executionOptions{timeout: time.Duration(*timePerRun) * time.Second, model: model, properties: properties},
 	)
 	if derr != nil {
-		return 1, fmt.Sprintf("witness2test-match: %v", derr)
+		return 1, errorMessage(derr)
 	}
 	if _, err := fmt.Fprintln(stdout, formatVerdict(verdict, instrumentedPath)); err != nil {
-		return 1, fmt.Sprintf("witness2test-match: failed to write verdict: %v", err)
+		return 1, errorMessage(fmt.Errorf("failed to write verdict: %w", err))
 	}
 	return 0, ""
 }
@@ -185,16 +186,18 @@ func turnWitnessToTest(witnessPath, programPath, tempDir, outputDir string, opti
 
 	parsed, err := witness.ParseWitness(witnessBytes, programBasename)
 	if err != nil {
-		return execution.Verdict{}, "", fmt.Errorf("witness parse: %w", err)
+		return execution.Verdict{}, "", &taggedError{tag: tagInvalidWitness, err: err}
 	}
 	if parsed.ViolationSequences == 0 {
-		return execution.Verdict{}, "", fmt.Errorf("witness parse: the witness contains no violation_sequence entry")
+		return execution.Verdict{}, "", &taggedError{tag: tagInvalidWitness, err: fmt.Errorf(
+			"the witness contains no violation_sequence entry (found: %s)", describeEntryTypes(parsed.EntryTypes))}
 	}
 	// The format requires a final segment with a target waypoint. Target
 	// waypoints in other files or with another action count as well: only a
 	// witness without any target is invalid.
 	if parsed.Counts.Target == 0 {
-		return execution.Verdict{}, "", fmt.Errorf("witness parse: the violation sequence has no target waypoint")
+		return execution.Verdict{}, "", &taggedError{tag: tagInvalidWitness, err: fmt.Errorf(
+			"the violation sequence has no target waypoint (found: %s)", parsed.Counts.Summary())}
 	}
 	selected := options.properties
 	if len(selected) == 0 {
@@ -272,6 +275,52 @@ func turnWitnessToTest(witnessPath, programPath, tempDir, outputDir string, opti
 	}
 	checkTargetLocation(&verdict, parsed.Targets, strings.Split(programSrc, "\n"))
 	return verdict, instrumentedPath, nil
+}
+
+// errorMessage formats an error for stderr as
+// "witness2test-match error: <details>", or as
+// "witness2test-match error [<tag>]: <details>" for an error with a tag.
+// The BenchExec tool-info module shows a tagged error as "ERROR(<tag>)".
+func errorMessage(err error) string {
+	var tagged *taggedError
+	if errors.As(err, &tagged) {
+		return fmt.Sprintf("witness2test-match error [%s]: %v", tagged.tag, err)
+	}
+	return fmt.Sprintf("witness2test-match error: %v", err)
+}
+
+// Tags that name the cause of an error. A tag consists of lowercase letters,
+// digits, spaces and '-', and starts with a letter.
+const (
+	// tagInvalidWitness marks an error in the witness, not in witness2test-match.
+	tagInvalidWitness = "invalid witness"
+)
+
+// taggedError is an error whose cause is named by a tag.
+type taggedError struct {
+	tag string
+	err error
+}
+
+func (e *taggedError) Error() string {
+	return e.err.Error()
+}
+
+func (e *taggedError) Unwrap() error {
+	return e.err
+}
+
+// describeEntryTypes lists the entry types of a witness. They are content of
+// the witness and printed quoted.
+func describeEntryTypes(entryTypes []string) string {
+	if len(entryTypes) == 0 {
+		return "no entries"
+	}
+	quoted := make([]string, len(entryTypes))
+	for i, entryType := range entryTypes {
+		quoted[i] = fmt.Sprintf("%q", entryType)
+	}
+	return strings.Join(quoted, ", ")
 }
 
 func effectiveModel(model string) string {

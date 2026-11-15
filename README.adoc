@@ -99,11 +99,22 @@ output of the executed test.
 
 The exit status of `witness2test-match` itself is `0` whenever a verdict is
 printed, whatever the verdict is. It is `1` for errors, in which case there is
-no verdict line and the message is on the standard error stream: unreadable or
-unparsable input files, a witness without a `violation_sequence` entry or
-without a target waypoint, a
-witness that claims a property outside the `--property` selection, or a
-program that does not compile. It is `2` for wrong command-line usage.
+no verdict line and the message is on the standard error stream: unreadable
+input files, an invalid witness, a witness that claims a property outside the
+`--property` selection, or a program that does not compile. It is `2` for
+wrong command-line usage. An error message starts with
+`witness2test-match error: `, or with `witness2test-match error [<tag>]: ` if
+a tag names the cause of the error. BenchExec shows a tagged error as
+`ERROR(<tag>)`.
+
+A witness is invalid if it is not valid YAML of the witness format, has no
+`violation_sequence` entry, has no target waypoint, or has a waypoint with a
+line or column below 1. The error then has the tag `invalid witness` and
+names the problem, for example:
+
+----
+witness2test-match error [invalid witness]: the violation sequence has no target waypoint (found: no waypoints)
+----
 
 * `Confirmed <property>` — the execution violated `<property>`, which is one of
   the properties the witness claims to be violated. A memory-safety
