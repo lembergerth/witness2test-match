@@ -65,12 +65,20 @@ class ArchiveIntegrationTest(unittest.TestCase):
                 ),
                 version_output,
             )
-            verdict_files = sorted((root / "integration").glob("*/expected-verdict"))
-            self.assertTrue(verdict_files, "No integration fixtures found")
+            expected_files = sorted(
+                [
+                    *(root / "integration").glob("*/expected-verdict"),
+                    *(root / "integration").glob("*/expected-error"),
+                ],
+                key=lambda path: path.parent.name,
+            )
+            self.assertTrue(expected_files, "No integration fixtures found")
             expected_smoke_output = "".join(
-                f"PASS: {path.parent.name} ({path.read_text().strip()})\n"
-                for path in verdict_files
-            ) + f"\nSummary: {len(verdict_files)} passed, 0 failed\n"
+                f"PASS: {path.parent.name} ("
+                + ("error" if path.name == "expected-error" else path.read_text().strip())
+                + ")\n"
+                for path in expected_files
+            ) + f"\nSummary: {len(expected_files)} passed, 0 failed\n"
             self.assertEqual(
                 subprocess.check_output(
                     [str(release / "smoketest.sh")],
