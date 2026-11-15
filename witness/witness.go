@@ -143,6 +143,12 @@ type Witness struct {
 	Branchings  []Branching
 	Targets     []Location
 	Counts      WaypointCounts
+	// Unsupported describes the first function_return waypoint whose value
+	// the tool cannot use, "" if there is none: a constraint value outside
+	// the literal allowlist. Such a value is not extracted. The witness cannot
+	// be replayed then: without the value, the later values of its call site
+	// would go to the wrong calls.
+	Unsupported string
 }
 
 // Regexes for the two accepted shapes of an assumption, after one optional
@@ -157,10 +163,11 @@ var (
 // violation witness. Only waypoints with action "follow" (or no action) whose
 // location is in the file programBasename are extracted.
 //
-// A function_return waypoint with a constraint value outside the literal
-// allowlist, or with an invalid location, is an error (see Parse). Assumption,
-// branching and target waypoints that cannot be interpreted are skipped
-// silently; they are still reflected in Counts.
+// A function_return waypoint with an invalid location is an error. One with a
+// constraint value outside the literal allowlist is not extracted and is
+// reported in Unsupported. Assumption, branching and target waypoints
+// that cannot be interpreted are skipped silently; they are still reflected
+// in Counts.
 //
 // A document without a violation_sequence entry is not an error: the result
 // has ViolationSequences == 0 and the caller decides what that means.
@@ -176,14 +183,17 @@ func ParseWitness(yamlBytes []byte, programBasename string) (*Witness, error) {
 // and returns a per-type waypoint summary alongside, so callers can distinguish
 // "no points we can interpret" from "witness rejected".
 //
-// An allowlist-violating constraint value is treated as an error rather than a
-// silent skip: a witness file is operator-controlled but its contents are not,
-// and a non-literal RHS in a constraint we then embed verbatim in generated C
-// would be a code-injection vector. See isAllowedLiteral.
+// Unlike ParseWitness, Parse has no other way to report a constraint value
+// outside the literal allowlist, so it returns an error for it: a non-literal
+// RHS in a constraint we then embed verbatim in generated C would be a
+// code-injection vector. See isAllowedLiteral.
 func Parse(yamlBytes []byte, programBasename string) (points []InjectionPoint, counts WaypointCounts, err error) {
 	w, err := parseWitness(yamlBytes, programBasename)
 	if err != nil {
 		return nil, w.Counts, err
+	}
+	if w.Unsupported != "" {
+		return nil, w.Counts, errors.New(w.Unsupported)
 	}
 	return w.Points, w.Counts, nil
 }
@@ -216,9 +226,12 @@ func parseWitness(yamlBytes []byte, programBasename string) (Witness, error) {
 					continue
 				}
 				if w.Type == "function_return" {
-					point, ok, err := functionReturnPoint(w, wantBase)
+					point, ok, unsupported, err := functionReturnPoint(w, wantBase)
 					if err != nil {
 						return Witness{Counts: result.Counts}, err
+					}
+					if unsupported != "" && result.Unsupported == "" {
+						result.Unsupported = unsupported
 					}
 					if ok {
 						result.Points = append(result.Points, point)
@@ -295,39 +308,40 @@ func printable(s string) string {
 
 // functionReturnPoint turns a followed function_return waypoint into an
 // InjectionPoint. ok is false if the waypoint carries no value for the program.
-func functionReturnPoint(w waypoint, wantBase string) (point InjectionPoint, ok bool, err error) {
+// unsupported describes a value outside the literal allowlist.
+func functionReturnPoint(w waypoint, wantBase string) (point InjectionPoint, ok bool, unsupported string, err error) {
 	if w.Constraint == nil {
-		return InjectionPoint{}, false, nil
+		return InjectionPoint{}, false, "", nil
 	}
 	m := shapeRegex.FindStringSubmatch(w.Constraint.Value)
 	if m == nil {
-		return InjectionPoint{}, false, nil
+		return InjectionPoint{}, false, "", nil
 	}
 	literal := m[1]
-	// Hard error, not skip: the literal will be embedded verbatim in
-	// generated C, so anything outside the allowlist is a potential
-	// injection vector and must abort before code generation.
+	// The literal would be embedded verbatim in generated C, so anything
+	// outside the allowlist is a potential injection vector: it is never
+	// extracted, and the caller does not replay the witness.
 	//
 	// The constraint value and the file name are content of the witness.
 	// They are printed with %q so that they cannot add lines or terminal
 	// escape sequences to the message.
 	if !isAllowedLiteral(literal) {
-		return InjectionPoint{}, false, fmt.Errorf(
+		return InjectionPoint{}, false, fmt.Sprintf(
 			"witness constraint value %q at %q:%d:%d is not an allowed C literal (integer, float, char, or bool of at most %d characters)",
-			w.Constraint.Value, w.Location.FileName, w.Location.Line, w.Location.Column, maxLiteralLength)
+			w.Constraint.Value, w.Location.FileName, w.Location.Line, w.Location.Column, maxLiteralLength), nil
 	}
 	if filepath.Base(w.Location.FileName) != wantBase {
-		return InjectionPoint{}, false, nil
+		return InjectionPoint{}, false, "", nil
 	}
 	if w.Location.Line <= 0 || w.Location.Column <= 0 {
-		return InjectionPoint{}, false, fmt.Errorf(
+		return InjectionPoint{}, false, "", fmt.Errorf(
 			"witness waypoint at %q has invalid 1-based location (line=%d, column=%d)",
 			w.Location.FileName, w.Location.Line, w.Location.Column)
 	}
 	return InjectionPoint{
 		Loc:   Location{Line: w.Location.Line, Column: w.Location.Column},
 		Value: cValue(literal),
-	}, true, nil
+	}, true, "", nil
 }
 
 // parseAssumption accepts exactly "<identifier> == <literal>" and

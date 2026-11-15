@@ -474,7 +474,8 @@ func TestParseWitnessDocumentOrder(t *testing.T) {
 }
 
 // ParseWitness and Parse must agree on function_return points, counts and
-// errors for every existing fixture.
+// errors for every existing fixture. Parse reports a value outside the
+// allowlist as an error, ParseWitness in Unsupported.
 func TestParseWitnessAgreesWithParse(t *testing.T) {
 	tests := []struct {
 		file     string
@@ -493,6 +494,12 @@ func TestParseWitnessAgreesWithParse(t *testing.T) {
 			data := mustRead(t, tt.file)
 			points, counts, perr := Parse(data, tt.basename)
 			w, werr := ParseWitness(data, tt.basename)
+			if werr == nil && w.Unsupported != "" {
+				if perr == nil || perr.Error() != w.Unsupported {
+					t.Errorf("Parse error = %v, want %q", perr, w.Unsupported)
+				}
+				return
+			}
 			if (perr == nil) != (werr == nil) {
 				t.Fatalf("Parse error = %v, ParseWitness error = %v", perr, werr)
 			}
@@ -551,16 +558,6 @@ func TestParseWitnessErrors(t *testing.T) {
 			wantErr: "failed to parse witness YAML",
 		},
 		{
-			name:    "hostile function_return literal",
-			yaml:    witnessYAML("", waypointYAML("function_return", "follow", `"\\result == 0; system(\"id\")"`, loc(10, 45))),
-			wantErr: "not an allowed C literal",
-		},
-		{
-			name:    "hostile function_return literal in another file",
-			yaml:    witnessYAML("", waypointYAML("function_return", "follow", `"\\result == f()"`, "file_name: q.c, line: 10, column: 45")),
-			wantErr: "not an allowed C literal",
-		},
-		{
 			name:    "function_return without column",
 			yaml:    witnessYAML("", waypointYAML("function_return", "follow", `"\\result == 1"`, "file_name: p.c, line: 10")),
 			wantErr: "invalid 1-based location",
@@ -591,10 +588,65 @@ func TestParseWitnessErrors(t *testing.T) {
 	}
 }
 
+// A value outside the allowlist marks the witness as unsupported, also in
+// another file. Parsing goes on so that the waypoints are still counted, and
+// the first such value is reported.
+func TestParseWitnessUnsupported(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml []byte
+		want string
+	}{
+		{
+			name: "hostile function_return literal",
+			yaml: witnessYAML("", waypointYAML("function_return", "follow", `"\\result == 0; system(\"id\")"`, loc(10, 45))),
+			want: `witness constraint value "\\result == 0; system(\"id\")" at "p.c":10:45 is not an allowed C literal`,
+		},
+		{
+			name: "hostile function_return literal in another file",
+			yaml: witnessYAML("", waypointYAML("function_return", "follow", `"\\result == f()"`, "file_name: q.c, line: 10, column: 45")),
+			want: `witness constraint value "\\result == f()" at "q.c":10:45 is not an allowed C literal`,
+		},
+		{
+			name: "first of two",
+			yaml: witnessYAML("",
+				waypointYAML("function_return", "follow", `"\\result == 1"`, loc(9, 45)),
+				waypointYAML("function_return", "follow", `"\\result == f()"`, loc(10, 45)),
+				waypointYAML("function_return", "follow", `"\\result == g()"`, loc(11, 45)),
+				waypointYAML("target", "follow", "", loc(12, 3)),
+			),
+			want: `witness constraint value "\\result == f()" at "p.c":10:45 is not an allowed C literal`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w, err := ParseWitness(tt.yaml, "p.c")
+			if err != nil {
+				t.Fatalf("ParseWitness: %v", err)
+			}
+			if !strings.HasPrefix(w.Unsupported, tt.want) {
+				t.Errorf("Unsupported = %q, want prefix %q", w.Unsupported, tt.want)
+			}
+			for _, p := range w.Points {
+				if p.Value != "1" {
+					t.Errorf("value outside the allowlist extracted: %+v", p)
+				}
+			}
+		})
+	}
+	w, err := ParseWitness(tests[2].yaml, "p.c")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Counts.FunctionReturn != 3 || w.Counts.Target != 1 {
+		t.Errorf("Counts = %+v, want all waypoints counted", w.Counts)
+	}
+}
+
 func TestParseKeepsCountsOnError(t *testing.T) {
 	yaml := witnessYAML("",
 		waypointYAML("assumption", "follow", `"x == 5"`, loc(3, 3)),
-		waypointYAML("function_return", "follow", `"\\result == f()"`, loc(10, 45)),
+		waypointYAML("function_return", "follow", `"\\result == 1"`, loc(0, 45)),
 	)
 	points, counts, err := Parse(yaml, "p.c")
 	if err == nil {

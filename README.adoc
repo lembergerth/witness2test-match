@@ -115,7 +115,9 @@ program that does not compile. It is `2` for wrong command-line usage.
   supplies no value (left): the witness supplies fewer values than the
   program needs.
 * `WitnessUnsupported` — the program calls `__VERIFIER_nondet_X()`, but the
-  witness provides no input value that the tool can interpret.
+  witness provides no input value that the tool can interpret, or a
+  `function_return` waypoint has a value that is not an allowed literal (see
+  below). Nothing is compiled or executed in the second case.
 * `PropertyUnsupported` — the witness claims a violation of a property that the
   tool can not check (`no-data-race`). Nothing is compiled or executed.
 * `Timeout` — execution exceeded `--time-per-run`.
@@ -301,8 +303,10 @@ a note is printed.
 * A `function_return` waypoint whose location is not a
   `__VERIFIER_nondet_X()` call provides no input value; a note names it.
 * Witness values are restricted to integer / float / character / boolean
-  literals of at most 64 characters; any other content in a value position is rejected or ignored, as a
-  security measure against code injection.
+  literals of at most 64 characters, as a security measure against code
+  injection. Any other value of a `function_return` waypoint makes the verdict
+  `WitnessUnsupported`; any other value of an assumption or branching waypoint
+  is ignored.
 * The test is executed with a wall-clock timeout, but without further
   sandboxing.
 

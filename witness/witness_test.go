@@ -56,16 +56,19 @@ func TestParseMalformedYAML(t *testing.T) {
 
 func TestParseRejectsHostileLiteral(t *testing.T) {
 	data := mustRead(t, "malicious-witness.yml")
-	_, _, err := Parse(data, "program.c")
-	if err == nil {
-		t.Fatal("hostile constraint value must be rejected")
+	w, err := ParseWitness(data, "program.c")
+	if err != nil {
+		t.Fatalf("ParseWitness: %v", err)
 	}
-	if !strings.Contains(err.Error(), "not an allowed C literal") {
-		t.Errorf("error should explain rejection: %v", err)
+	if len(w.Points) != 0 {
+		t.Errorf("hostile constraint value must not be extracted, got %+v", w.Points)
+	}
+	if !strings.Contains(w.Unsupported, "not an allowed C literal") {
+		t.Errorf("Unsupported should explain rejection: %q", w.Unsupported)
 	}
 	// The file name comes from the witness and is printed quoted.
-	if !strings.Contains(err.Error(), `"program.c":10:45`) {
-		t.Errorf("error should locate the offending waypoint: %v", err)
+	if !strings.Contains(w.Unsupported, `"program.c":10:45`) {
+		t.Errorf("Unsupported should locate the offending waypoint: %q", w.Unsupported)
 	}
 }
 

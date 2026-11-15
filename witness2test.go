@@ -224,6 +224,9 @@ func turnWitnessToTest(witnessPath, programPath, tempDir, outputDir string, opti
 		return stopEarly(execution.PropertyUnsupported,
 			fmt.Sprintf("checking %s is not supported", joinProperties(unsupported)))
 	}
+	if parsed.Unsupported != "" {
+		return stopEarly(execution.WitnessUnsupported, parsed.Unsupported)
+	}
 
 	instrumented, err := instrument.InstrumentWitness(programSrc, parsed, instrument.Options{
 		RewriteReachError: property.Contains(checked, property.UnreachCall),

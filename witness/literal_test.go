@@ -160,7 +160,8 @@ func TestParseWitnessFunctionReturnValues(t *testing.T) {
 	}
 }
 
-// A function_return value outside the allowlist is an error.
+// A function_return value outside the allowlist is not extracted, and the
+// witness is marked as unsupported.
 func TestParseWitnessRejectsFunctionReturnValues(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -179,11 +180,14 @@ func TestParseWitnessRejectsFunctionReturnValues(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			yaml := witnessYAML("", waypointYAML("function_return", "follow", tt.constraint, loc(10, 45)))
 			w, err := ParseWitness(yaml, "p.c")
-			if err == nil {
-				t.Fatalf("expected an error, got witness %s", short(w))
+			if err != nil {
+				t.Fatalf("ParseWitness: %s", short(err))
 			}
-			if !strings.Contains(err.Error(), "not an allowed C literal") {
-				t.Errorf("error %s does not say that the literal is not allowed", short(err))
+			if len(w.Points) != 0 {
+				t.Errorf("Points = %s, want none", short(w.Points))
+			}
+			if !strings.Contains(w.Unsupported, "not an allowed C literal") {
+				t.Errorf("Unsupported %s does not say that the literal is not allowed", short(w.Unsupported))
 			}
 		})
 	}
@@ -288,7 +292,7 @@ func TestParseWitnessKeepsBranchingOutcomes(t *testing.T) {
 }
 
 // File names and constraint values come from the witness. They must not be
-// able to add lines or terminal escape sequences to an error message.
+// able to add lines or terminal escape sequences to a message.
 func TestParseWitnessErrorsQuoteWitnessContent(t *testing.T) {
 	// YAML double-quoted scalar and what %q makes of its value.
 	const hostileName = `"dir\n\e[31mFAKE ERROR\e[0m\r/p.c"`
@@ -319,11 +323,18 @@ func TestParseWitnessErrorsQuoteWitnessContent(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := ParseWitness(tt.yaml, "p.c")
-			if err == nil {
-				t.Fatal("expected an error")
+			// A value outside the allowlist is reported in the witness,
+			// an invalid location as an error.
+			w, err := ParseWitness(tt.yaml, "p.c")
+			var msg string
+			switch {
+			case err != nil:
+				msg = err.Error()
+			case w.Unsupported != "":
+				msg = w.Unsupported
+			default:
+				t.Fatal("expected an error or an unsupported value")
 			}
-			msg := err.Error()
 			for _, r := range msg {
 				if r < 0x20 || r == 0x7f {
 					t.Errorf("error message contains the control character %q: %q", r, msg)

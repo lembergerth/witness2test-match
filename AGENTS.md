@@ -37,7 +37,7 @@ Pipeline:
 
 1. Read witness and program; parse the witness (no `violation_sequence` entry or no target waypoint → error).
 2. Checked properties = properties the witness claims; they must be a subset of the `--property` selection (error otherwise). No or unknown specification → the selection is checked.
-3. Claimed property not checkable (`no-data-race`) → verdict `PropertyUnsupported`, stop.
+3. Claimed property not checkable (`no-data-race`) → verdict `PropertyUnsupported`, stop. A `function_return` value outside the literal allowlist → verdict `WitnessUnsupported`, stop.
 4. Instrument. Program has nondet calls but no witness value matched → verdict `WitnessUnsupported`, stop. A program without nondet calls is executed anyway.
 5. Write `output/instrumented_program.c`; compile with the harness and the flags for the checked properties.
 6. Execute with timeout (process-group kill on timeout).
@@ -79,7 +79,7 @@ Options:
 - **Exit codes** (`internal/exitcodes/exitcodes.go`): 213 `reach_error()` reached, 214 witness inconsistent (a nondet call without a witness value left, including call sites without any witness value), 215 sanitizer report (set via `ASAN_OPTIONS`/`UBSAN_OPTIONS`/`LSAN_OPTIONS`), 216 memcleanup violation. An exit code alone never confirms a violation; the matching report (for 213: the `reach_error called` message) must be on stderr.
 - **Sanitizer classification** (`execution/properties.go`): no-overflow counts only "cannot be represented in type" reports (minus `INT_MIN % -1`, recognized by the operator at the reported position); address-sanitizer error kinds map to valid-free or valid-deref via `asanKinds`; unknown kinds (stack exhaustion, overlapping `memcpy`) confirm nothing. `reach_error()` is only redirected when unreach-call is checked.
 - **Requirements for tests**: gcc with sanitizer runtimes; 32-bit cases need `gcc-multilib` and the 32-bit sanitizer runtimes and skip otherwise.
-- **Constraint allowlist** (security-critical, `witness/witness.go`): every value taken from a witness and embedded in generated C must match a strict regex for integer / float / character / boolean literals. Without this allowlist, an attacker-controlled witness could inject arbitrary C into the generated source.
+- **Constraint allowlist** (security-critical, `witness/witness.go`): every value taken from a witness and embedded in generated C must match a strict regex for integer / float / character / boolean literals. A `function_return` value outside the allowlist makes the verdict `WitnessUnsupported` (`Witness.Unsupported`); dropping only that value would shift the later values of its call site. Without this allowlist, an attacker-controlled witness could inject arbitrary C into the generated source.
 - **Short-circuit conditions**: a branching waypoint on a condition that combines a nondet call with `&&`/`||` is deliberately not used — the witness does not say which operand decided the outcome.
 - **Sandbox limits**: the tool runs the compiled binary with a wall-clock timeout and process-group kill on timeout. It does *not* apply `setrlimit` or namespacing. On shared infrastructure, wrap invocations in `bwrap` or `firejail`.
 - **Leniency**: only an unparsable witness (or one without `violation_sequence`, one without any target waypoint, or a claim outside the `--property` selection) is an error. Waypoints that cannot be used (including `function_return` on a non-nondet call) become notes; at most 10 are printed.

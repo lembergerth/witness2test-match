@@ -476,6 +476,23 @@ func TestPipelineRejectsWitnessWithoutTarget(t *testing.T) {
 	}
 }
 
+func TestPipelineValueOutsideAllowlistIsUnsupported(t *testing.T) {
+	// The second value is a valid expression, but not a literal: the witness
+	// cannot be replayed, and nothing of it may reach the generated C.
+	w := witnessFor("G ! call(reach_error())", returns(4, 33, "1"), returns(4, 33, "x + 1"), target(6, 5))
+	v, instPath := runPipeline(t, programWithSingleNondet, w)
+	if v.Status != execution.WitnessUnsupported {
+		t.Fatalf("got %s, want WitnessUnsupported", v.Status)
+	}
+	want := `witness constraint value "\\result == x + 1" at "program.c":4:33 is not an allowed C literal (integer, float, char, or bool of at most 64 characters)`
+	if len(v.Notes) != 1 || v.Notes[0] != want {
+		t.Errorf("notes = %q, want %q", v.Notes, want)
+	}
+	if got, err := os.ReadFile(instPath); err != nil || string(got) != programWithSingleNondet {
+		t.Errorf("instrumented program = %q, %v; want the program unchanged", got, err)
+	}
+}
+
 func TestPipelineNotesDataModelMismatch(t *testing.T) {
 	// witnessFor states data_model LP64.
 	v, _ := runPipelineFor(t, derefProgram, witnessFor("G valid-deref", target(5, 3)), "ILP32", allMemsafety)
