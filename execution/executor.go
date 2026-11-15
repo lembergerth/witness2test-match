@@ -80,7 +80,9 @@ func Compile(programCode, harnessPath string, options CompileOptions) (string, e
 	args = append(args, propertyCompilerArgs(options.Properties)...)
 	switch options.Model {
 	case "ILP32":
-		args = append(args, "-m32")
+		// SSE arithmetic instead of x87: float and double operations are
+		// evaluated without excess precision, as SV-COMP assumes.
+		args = append(args, "-m32", "-msse2", "-mfpmath=sse")
 	case "", "LP64":
 	default:
 		return "", fmt.Errorf("invalid data model %q: expected ILP32 or LP64", options.Model)

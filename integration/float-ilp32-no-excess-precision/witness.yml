@@ -1,0 +1,23 @@
+# A correct program without nondeterministic input. With x87 floating-point
+# arithmetic, `a / b` is evaluated with excess precision and differs from the
+# float stored in `quotient`; SV-COMP assumes IEEE single precision, so the
+# test must use SSE arithmetic under ILP32 and not reach reach_error().
+
+- entry_type: violation_sequence
+  metadata:
+    format_version: "2.4"
+    uuid: 00000000-0000-0000-0000-000000000105
+    creation_time: '2026-01-01T00:00:00Z'
+    producer: { name: test-fixture, version: '0' }
+    task:
+      input_files: [ program.c ]
+      input_file_hashes: { program.c: deadbeef }
+      specification: "G ! call(reach_error())"
+      data_model: ILP32
+      language: C
+  content:
+  - segment:
+    - waypoint:
+        action: follow
+        location: { file_name: program.c, line: 7, column: 5 }
+        type: target

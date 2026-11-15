@@ -123,7 +123,9 @@ program that does not compile. It is `2` for wrong command-line usage.
 
 Run `witness2test-match --help` to see all available options.
 
-`--model ILP32` compiles the program and harness with GCC's `-m32` option.
+`--model ILP32` compiles the program and harness with GCC's `-m32` option and
+with `-msse2 -mfpmath=sse`, so that `float` and `double` arithmetic has no
+excess precision (x87 arithmetic would evaluate it with 80 bits).
 `--model LP64` (the default) uses no special compiler option and assumes a
 64-bit host. Other model values are rejected.
 
