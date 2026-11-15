@@ -135,6 +135,10 @@ type Witness struct {
 	// and for an empty document; ParseWitness does not treat that as an
 	// error, the caller decides.
 	ViolationSequences int
+	// EntryTypes is the entry_type of every entry in the document, in
+	// document order; "" for an entry without one. It is content of the
+	// witness: quote it before printing.
+	EntryTypes []string
 	// Points are the function_return waypoints, exactly as returned by Parse.
 	Points []InjectionPoint
 	// Assumptions, Branchings and Targets are in document order. The column
@@ -210,6 +214,7 @@ func parseWitness(yamlBytes []byte, programBasename string) (Witness, error) {
 
 	var result Witness
 	for _, e := range doc {
+		result.EntryTypes = append(result.EntryTypes, e.EntryType)
 		if e.EntryType != "violation_sequence" {
 			continue
 		}

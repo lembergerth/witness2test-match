@@ -386,6 +386,34 @@ func TestParseWitnessViolationSequences(t *testing.T) {
 	}
 }
 
+func TestParseWitnessEntryTypes(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml string
+		want []string
+	}{
+		{name: "empty document", yaml: "", want: nil},
+		{name: "empty sequence", yaml: "[]\n", want: nil},
+		{name: "entry without entry_type", yaml: "- content: []\n", want: []string{""}},
+		{
+			name: "mixed entries",
+			yaml: "- entry_type: invariant_set\n  content: []\n- entry_type: violation_sequence\n  content: []\n- entry_type: Violation_Sequence\n",
+			want: []string{"invariant_set", "violation_sequence", "Violation_Sequence"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w, err := ParseWitness([]byte(tt.yaml), "p.c")
+			if err != nil {
+				t.Fatalf("ParseWitness: %v", err)
+			}
+			if !reflect.DeepEqual(w.EntryTypes, tt.want) {
+				t.Errorf("EntryTypes = %q, want %q", w.EntryTypes, tt.want)
+			}
+		})
+	}
+}
+
 func TestParseWitnessViolationSequencesOfFixtures(t *testing.T) {
 	for name, want := range map[string]int{"symbiotic.yml": 1, "multi-sequence.yml": 2} {
 		w, err := ParseWitness(mustRead(t, name), "program.c")

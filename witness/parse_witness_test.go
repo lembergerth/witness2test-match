@@ -420,6 +420,7 @@ func TestParseWitnessToleratesThreadID(t *testing.T) {
 		Specification:      "G ! data-race",
 		DataModel:          "LP64",
 		ViolationSequences: 1,
+		EntryTypes:         []string{"violation_sequence"},
 		Points:             []InjectionPoint{{Loc: Location{7, 33}, Value: "9"}},
 		Assumptions:        []Assumption{{Loc: Location{5, 3}, Variable: "x", Value: "3"}},
 		Branchings:         []Branching{{Loc: Location{6, 3}, Value: "false"}},
