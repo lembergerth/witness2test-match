@@ -129,7 +129,7 @@ func TestPipelineRejectsClaimOutsideSelection(t *testing.T) {
 	wit := filepath.Join(dir, "witness.yml")
 	out := filepath.Join(dir, "out")
 	writeFile(t, prog, overflowProgram)
-	writeFile(t, wit, witnessFor("G ! overflow", returns(3, 33, "2147483647")))
+	writeFile(t, wit, witnessFor("G ! overflow", returns(3, 33, "2147483647"), target(5, 3)))
 	exit, msg := run([]string{"--witness", wit, "--program", prog, "--output", out}, os.Stdout, os.Stderr)
 	want := "witness2test-match: witness claims a violation of no-overflow, which the selected properties (unreach-call) do not include"
 	if exit != 1 || msg != want {
@@ -294,7 +294,6 @@ int main() {
 		{"unreach at target", unreachProgram, witnessFor("G ! call(reach_error())", returns(4, 33, "2"), target(9, 5)), unreach, property.UnreachCall, ""},
 		{"unreach at other call", unreachProgram, witnessFor("G ! call(reach_error())", returns(4, 33, "1"), target(9, 5)), unreach, "",
 			"violation of unreach-call observed at line 6, but the witness's target is at line 9"},
-		{"unreach without target", unreachProgram, witnessFor("G ! call(reach_error())", returns(4, 33, "1")), unreach, property.UnreachCall, ""},
 		{"overflow at target", overflowProgram, witnessFor("G ! overflow", returns(3, 33, "2147483647"), target(5, 3)), overflow, property.NoOverflow, ""},
 		{"overflow elsewhere", overflowProgram, witnessFor("G ! overflow", returns(3, 33, "2147483647"), target(6, 3)), overflow, "",
 			"violation of no-overflow observed at line 5, but the witness's target is at line 6"},
@@ -440,6 +439,36 @@ func TestPipelineRejectsWitnessWithoutViolationSequence(t *testing.T) {
 			writeFile(t, wit, content)
 			_, _, err := turnWitnessToTest(wit, prog, dir, dir, executionOptions{timeout: time.Second, properties: allMemsafety})
 			want := "witness parse: the witness contains no violation_sequence entry"
+			if err == nil || err.Error() != want {
+				t.Errorf("error = %v, want %q", err, want)
+			}
+		})
+	}
+}
+
+func TestPipelineRejectsWitnessWithoutTarget(t *testing.T) {
+	// A program that violates the property without any input: only the
+	// rejection of the witness can keep the test from confirming it.
+	const program = "int main() {\n  int *p = 0;\n  return *p;\n}\n"
+	emptyContent := `- entry_type: "violation_sequence"
+  metadata:
+    format_version: "2.0"
+    task:
+      specification: "G valid-deref"
+  content: []
+`
+	for name, content := range map[string]string{
+		"empty content": emptyContent,
+		"no target":     witnessFor("G valid-deref", returns(2, 3, "0")),
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			prog := filepath.Join(dir, "program.c")
+			wit := filepath.Join(dir, "witness.yml")
+			writeFile(t, prog, program)
+			writeFile(t, wit, content)
+			_, _, err := turnWitnessToTest(wit, prog, dir, dir, executionOptions{timeout: time.Second, properties: allMemsafety})
+			want := "witness parse: the violation sequence has no target waypoint"
 			if err == nil || err.Error() != want {
 				t.Errorf("error = %v, want %q", err, want)
 			}

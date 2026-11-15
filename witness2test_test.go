@@ -85,6 +85,11 @@ const witnessMissesViolation = `- entry_type: "violation_sequence"
         action: "follow"
         constraint: { value: "\\result == 0", format: "acsl_expression" }
         location: { file_name: "program.c", line: 4, column: 33 }
+  - segment:
+    - waypoint:
+        type: "target"
+        action: "follow"
+        location: { file_name: "program.c", line: 6, column: 5 }
 `
 
 const programWithLoopNondet = `void reach_error(){}
@@ -118,6 +123,11 @@ const witnessOverflow = `- entry_type: "violation_sequence"
         action: "follow"
         constraint: { value: "\\result == 1", format: "acsl_expression" }
         location: { file_name: "program.c", line: 6, column: 34 }
+  - segment:
+    - waypoint:
+        type: "target"
+        action: "follow"
+        location: { file_name: "program.c", line: 8, column: 18 }
 `
 
 const witnessAssumptionOnly = `- entry_type: "violation_sequence"
@@ -139,6 +149,11 @@ const witnessAssumptionOnly = `- entry_type: "violation_sequence"
         action: "follow"
         constraint: { value: "x >= 42", format: "c_expression" }
         location: { file_name: "program.c", line: 5, column: 3 }
+  - segment:
+    - waypoint:
+        type: "target"
+        action: "follow"
+        location: { file_name: "program.c", line: 6, column: 5 }
 `
 
 func runPipeline(t *testing.T, programSrc, witnessSrc string) (execution.Verdict, string) {

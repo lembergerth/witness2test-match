@@ -190,6 +190,12 @@ func turnWitnessToTest(witnessPath, programPath, tempDir, outputDir string, opti
 	if parsed.ViolationSequences == 0 {
 		return execution.Verdict{}, "", fmt.Errorf("witness parse: the witness contains no violation_sequence entry")
 	}
+	// The format requires a final segment with a target waypoint. Target
+	// waypoints in other files or with another action count as well: only a
+	// witness without any target is invalid.
+	if parsed.Counts.Target == 0 {
+		return execution.Verdict{}, "", fmt.Errorf("witness parse: the violation sequence has no target waypoint")
+	}
 	selected := options.properties
 	if len(selected) == 0 {
 		selected = []property.Property{property.UnreachCall}

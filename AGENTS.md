@@ -35,7 +35,7 @@ tell which property was violated.
 
 Pipeline:
 
-1. Read witness and program; parse the witness (no `violation_sequence` entry → error).
+1. Read witness and program; parse the witness (no `violation_sequence` entry or no target waypoint → error).
 2. Checked properties = properties the witness claims; they must be a subset of the `--property` selection (error otherwise). No or unknown specification → the selection is checked.
 3. Claimed property not checkable (`no-data-race`) → verdict `PropertyUnsupported`, stop.
 4. Instrument. Program has nondet calls but no witness value matched → verdict `WitnessUnsupported`, stop. A program without nondet calls is executed anyway.
@@ -82,7 +82,7 @@ Options:
 - **Constraint allowlist** (security-critical, `witness/witness.go`): every value taken from a witness and embedded in generated C must match a strict regex for integer / float / character / boolean literals. Without this allowlist, an attacker-controlled witness could inject arbitrary C into the generated source.
 - **Short-circuit conditions**: a branching waypoint on a condition that combines a nondet call with `&&`/`||` is deliberately not used — the witness does not say which operand decided the outcome.
 - **Sandbox limits**: the tool runs the compiled binary with a wall-clock timeout and process-group kill on timeout. It does *not* apply `setrlimit` or namespacing. On shared infrastructure, wrap invocations in `bwrap` or `firejail`.
-- **Leniency**: only an unparsable witness (or one without `violation_sequence`, or a claim outside the `--property` selection) is an error. Waypoints that cannot be used (including `function_return` on a non-nondet call) become notes; at most 10 are printed.
+- **Leniency**: only an unparsable witness (or one without `violation_sequence`, one without any target waypoint, or a claim outside the `--property` selection) is an error. Waypoints that cannot be used (including `function_return` on a non-nondet call) become notes; at most 10 are printed.
 - **`reach_error()` redirection** passes `__LINE__`, so a call inside a macro is reported at the line where the macro is used. Both the generated wrapper and the harness's weak `reach_error()` print `witness2test-match: reach_error called`.
 - **valid-memtrack and stale pointers**: the leak sanitizer treats every word on the live stack as a possible pointer. Harness code that handles block addresses at exit must keep them out of scanned memory (store them inverted, scrub the stack afterwards, see `harness.c.template`); otherwise real leaks are hidden.
 - **Checks before finishing**: `gofmt -l .`, `go vet ./...`, `make test`, `make integration-test`, `make archive-test`, `make lint`, `reuse lint`.
