@@ -37,7 +37,7 @@ sv-comp-archive: build
 	mkdir -p "$$staging/$$package/bin"; \
 	cp $(BINARY_NAME) "$$staging/$$package/bin/"; \
 	cp -R smoketest.sh integration-test.sh integration REUSE.toml LICENSE LICENSES "$$staging/$$package/"; \
-	cp README.adoc "$$staging/$$package/README"; \
+	cp README.adoc "$$staging/$$package/README.adoc"; \
 	(cd "$$staging" && zip -qr "$$archive" "$$package"); \
 	mv "$$staging/$$archive" "$$archive"; \
 	echo "Created $$archive"
