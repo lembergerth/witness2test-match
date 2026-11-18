@@ -232,7 +232,12 @@ func TestFormatVerdict(t *testing.T) {
 		{"not confirmed", execution.Verdict{Status: execution.NotConfirmed}, "Verdict: NotConfirmed (exit code 0). Instrumented program: /tmp/x.c"},
 		{"inconsistent", execution.Verdict{Status: execution.Inconsistent, ExitCode: 214}, "Verdict: WitnessInconsistent (exit code 214). Instrumented program: /tmp/x.c"},
 		{"timeout", execution.Verdict{Status: execution.Timeout, ExitCode: -1}, "Verdict: Timeout (exit code -1). Instrumented program: /tmp/x.c"},
-		{"notes and stderr", execution.Verdict{Status: execution.WitnessUnsupported, Notes: []string{"first", "second"}, Stderr: "diagnostic line"}, "Verdict: WitnessUnsupported (exit code 0). Instrumented program: /tmp/x.c\nNote: first\nNote: second\n--- program stderr ---\ndiagnostic line"},
+		// The verdict line comes last, so that output of the program cannot
+		// be taken for it when the output is read from the end.
+		{"notes and stderr", execution.Verdict{Status: execution.WitnessUnsupported, Notes: []string{"first", "second"}, Stderr: "diagnostic line"},
+			"Note: first\nNote: second\n--- program stderr ---\ndiagnostic line\n--- end of program stderr ---\nVerdict: WitnessUnsupported (exit code 0). Instrumented program: /tmp/x.c"},
+		{"stderr with final newline", execution.Verdict{Status: execution.NotConfirmed, Stderr: "Verdict: Confirmed unreach-call\n"},
+			"--- program stderr ---\nVerdict: Confirmed unreach-call\n--- end of program stderr ---\nVerdict: NotConfirmed (exit code 0). Instrumented program: /tmp/x.c"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

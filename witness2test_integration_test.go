@@ -66,7 +66,7 @@ func TestBinaryILP32Violation(t *testing.T) {
 		exitCode int
 		stderr   string
 	}{
-		{"ILP32", "Confirmed unreach-call", 213, "--- program stderr ---\nwitness2test-match: reach_error called at line 6\n\n"},
+		{"ILP32", "Confirmed unreach-call", 213, "--- program stderr ---\nwitness2test-match: reach_error called at line 6\n--- end of program stderr ---\n"},
 		{"LP64", "NotConfirmed", 0, "Note: witness states data model ILP32, but the test is built for LP64 (--model)\n"},
 	} {
 		t.Run(tt.model, func(t *testing.T) {
@@ -76,8 +76,8 @@ func TestBinaryILP32Violation(t *testing.T) {
 			if err != nil {
 				t.Fatalf("witness2test-match failed: %v\n%s", err, combined)
 			}
-			want := fmt.Sprintf("Verdict: %s (exit code %d). Instrumented program: %s\n%s",
-				tt.verdict, tt.exitCode, filepath.Join(out, "instrumented_program.c"), tt.stderr)
+			want := fmt.Sprintf("%sVerdict: %s (exit code %d). Instrumented program: %s\n",
+				tt.stderr, tt.verdict, tt.exitCode, filepath.Join(out, "instrumented_program.c"))
 			if string(combined) != want {
 				t.Errorf("output = %q, want %q", combined, want)
 			}
@@ -129,8 +129,8 @@ func TestBinaryOnSymbioticExample(t *testing.T) {
 				t.Fatalf("witness2test-match failed: %v\n%s", err, combined)
 			}
 			want := fmt.Sprintf("Verdict: Confirmed unreach-call (exit code 213). Instrumented program: %s\n", filepath.Join(out, "instrumented_program.c"))
-			if !strings.HasPrefix(string(combined), want) {
-				t.Errorf("output = %q, want prefix %q", combined, want)
+			if !strings.HasSuffix(string(combined), want) {
+				t.Errorf("output = %q, want suffix %q", combined, want)
 			}
 		})
 	}

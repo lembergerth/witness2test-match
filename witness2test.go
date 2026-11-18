@@ -394,13 +394,20 @@ func formatVerdict(v execution.Verdict, instrumentedPath string) string {
 	if v.Status == execution.Confirmed {
 		status += " " + v.Violated.Name()
 	}
-	msg := fmt.Sprintf("Verdict: %s (exit code %d). Instrumented program: %s",
-		status, v.ExitCode, instrumentedPath)
+	// The verdict line comes last: the BenchExec tool-info module reads the
+	// output from the end, so the program's stderr must not follow it.
+	var msg strings.Builder
 	for _, note := range v.Notes {
-		msg += "\nNote: " + note
+		msg.WriteString("Note: " + note + "\n")
 	}
 	if v.Stderr != "" {
-		msg += "\n--- program stderr ---\n" + v.Stderr
+		msg.WriteString("--- program stderr ---\n" + v.Stderr)
+		if !strings.HasSuffix(v.Stderr, "\n") {
+			msg.WriteString("\n")
+		}
+		msg.WriteString("--- end of program stderr ---\n")
 	}
-	return msg
+	fmt.Fprintf(&msg, "Verdict: %s (exit code %d). Instrumented program: %s",
+		status, v.ExitCode, instrumentedPath)
+	return msg.String()
 }

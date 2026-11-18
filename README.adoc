@@ -89,13 +89,15 @@ and named in the verdict line.
 
 === Verdicts
 
-If the tool reaches a verdict, the first line of its output is
+If the tool reaches a verdict, the last line of its output is
 `Verdict: <verdict> (exit code <N>). Instrumented program: <path>`,
 where `<N>` is the exit code of the executed test program (`-1` if it was
 killed by a signal or the timeout; `0` if nothing was executed).
-The line may be followed by lines starting with `Note:` that explain the
-verdict, and, after a line `--- program stderr ---`, by the standard error
-output of the executed test.
+The line may be preceded by lines starting with `Note:` that explain the
+verdict, and by the standard error output of the executed test between the
+lines `--- program stderr ---` and `--- end of program stderr ---`.
+The verdict line comes last so that output of the tested program can never be
+mistaken for it when the output is read from the end.
 
 The exit status of `witness2test-match` itself is `0` whenever a verdict is
 printed, whatever the verdict is. It is `1` for errors, in which case there is
