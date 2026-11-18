@@ -131,7 +131,7 @@ func TestPipelineRejectsClaimOutsideSelection(t *testing.T) {
 	writeFile(t, prog, overflowProgram)
 	writeFile(t, wit, witnessFor("G ! overflow", returns(3, 33, "2147483647"), target(5, 3)))
 	exit, msg := run([]string{"--witness", wit, "--program", prog, "--output", out}, os.Stdout, os.Stderr)
-	want := "witness2test-match error: witness claims a violation of no-overflow, which the selected properties (unreach-call) do not include"
+	want := "witness2test-match error [inconsistent-property]: witness claims a violation of no-overflow, which the selected properties (unreach-call) do not include"
 	if exit != 1 || msg != want {
 		t.Errorf("run = %d, %q; want 1, %q", exit, msg, want)
 	}

@@ -141,8 +141,9 @@ func resolveCheckedProperties(selected []property.Property, specification string
 		return unique(selected), []string{fmt.Sprintf("witness specification %q is not recognized; checking the selected properties", specification)}, nil
 	}
 	if missing := property.MissingFrom(claimed, selected); len(missing) > 0 {
-		return nil, nil, fmt.Errorf("witness claims a violation of %s, which the selected properties (%s) do not include",
-			joinProperties(missing), joinProperties(unique(selected)))
+		return nil, nil, &taggedError{tag: tagInconsistentProperty, err: fmt.Errorf(
+			"witness claims a violation of %s, which the selected properties (%s) do not include",
+			joinProperties(missing), joinProperties(unique(selected)))}
 	}
 	return unique(claimed), nil, nil
 }
@@ -294,6 +295,9 @@ func errorMessage(err error) string {
 const (
 	// tagInvalidWitness marks an error in the witness, not in witness2test-match.
 	tagInvalidWitness = "invalid witness"
+	// tagInconsistentProperty marks a witness that claims a property outside
+	// the --property selection.
+	tagInconsistentProperty = "inconsistent-property"
 )
 
 // taggedError is an error whose cause is named by a tag.

@@ -116,6 +116,13 @@ names the problem, for example:
 witness2test-match error [invalid witness]: the violation sequence has no target waypoint (found: no waypoints)
 ----
 
+A witness that claims a property outside the `--property` selection gives an
+error with the tag `inconsistent-property`, for example:
+
+----
+witness2test-match error [inconsistent-property]: witness claims a violation of no-overflow, which the selected properties (unreach-call) do not include
+----
+
 * `Confirmed <property>` — the execution violated `<property>`, which is one of
   the properties the witness claims to be violated. A memory-safety
   subproperty is named without `valid-memsafety`, as SV-COMP reports it, for
