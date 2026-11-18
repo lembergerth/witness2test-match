@@ -111,7 +111,7 @@ a tag names the cause of the error. BenchExec shows a tagged error as
 
 A witness is invalid if it is not valid YAML of the witness format, has no
 `violation_sequence` entry, has no target waypoint, or has a waypoint with a
-line or column below 1. The error then has the tag `invalid witness` and
+line below 1 or a negative column. The error then has the tag `invalid witness` and
 names the problem, for example:
 
 ----
@@ -137,7 +137,8 @@ witness2test-match error [inconsistent-property]: witness claims a violation of 
 * `WitnessUnsupported` — the program calls `__VERIFIER_nondet_X()`, but the
   witness provides no input value that the tool can interpret, or a
   `function_return` waypoint has a value that is not an allowed literal (see
-  below). Nothing is compiled or executed in the second case.
+  below), or has no column on a line with several `__VERIFIER_nondet_X()`
+  calls. Nothing is compiled or executed in the last two cases.
 * `PropertyUnsupported` — the witness claims a violation of a property that the
   tool can not check (`no-data-race`). Nothing is compiled or executed.
 * `Timeout` — execution exceeded `--time-per-run`.
@@ -268,7 +269,8 @@ one call site. All waypoints must have the action `follow`. Values are consumed
 in the order of the waypoints in the witness, one per call.
 
 . `function_return` waypoints with a constraint `\result == <literal>`, located
-  at the closing parenthesis of the call.
+  at the closing parenthesis of the call. A waypoint without column belongs to
+  the call if it is the only `__VERIFIER_nondet_X()` call on the line.
 . `assumption` waypoints with a constraint that is exactly `x == <literal>` (or
   `<literal> == x`), if the statement directly before the waypoint's location is
   exactly `x = __VERIFIER_nondet_X();` or `<type> x = __VERIFIER_nondet_X();`,

@@ -518,6 +518,27 @@ func TestPipelineValueOutsideAllowlistIsUnsupported(t *testing.T) {
 	}
 }
 
+// The format allows a function_return waypoint without column.
+func TestPipelineFunctionReturnWithoutColumn(t *testing.T) {
+	returnsWithoutColumn := func(line int, value string) string {
+		return fmt.Sprintf(`{ type: "function_return", action: "follow", constraint: { value: "\\result == %s", format: "ext_c_expression" }, location: { file_name: "program.c", line: %d } }`, value, line)
+	}
+	v, _ := runPipeline(t, programWithSingleNondet, witnessFor("G ! call(reach_error())", returnsWithoutColumn(4, "42"), target(6, 5)))
+	if v.Status != execution.Confirmed {
+		t.Errorf("single call on the line: got %s, want Confirmed (notes %q)", v.Status, v.Notes)
+	}
+
+	twoCalls := strings.Replace(programWithSingleNondet, "int x = __VERIFIER_nondet_int();", "int x = __VERIFIER_nondet_int() + __VERIFIER_nondet_int();", 1)
+	v, instPath := runPipeline(t, twoCalls, witnessFor("G ! call(reach_error())", returnsWithoutColumn(4, "42"), target(6, 5)))
+	want := "function_return waypoint at line 4 has no column, and the line has 2 __VERIFIER_nondet_X() calls"
+	if v.Status != execution.WitnessUnsupported || len(v.Notes) != 1 || v.Notes[0] != want {
+		t.Errorf("two calls on the line: got %s, notes %q; want WitnessUnsupported, %q", v.Status, v.Notes, want)
+	}
+	if got, err := os.ReadFile(instPath); err != nil || string(got) != twoCalls {
+		t.Errorf("instrumented program = %q, %v; want the program unchanged", got, err)
+	}
+}
+
 func TestPipelineNotesDataModelMismatch(t *testing.T) {
 	// witnessFor states data_model LP64.
 	v, _ := runPipelineFor(t, derefProgram, witnessFor("G valid-deref", target(5, 3)), "ILP32", allMemsafety)

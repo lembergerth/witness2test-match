@@ -559,8 +559,8 @@ func TestParseWitnessErrors(t *testing.T) {
 			wantErr: "failed to parse witness YAML",
 		},
 		{
-			name:    "function_return without column",
-			yaml:    witnessYAML("", waypointYAML("function_return", "follow", `"\\result == 1"`, "file_name: p.c, line: 10")),
+			name:    "function_return with negative column",
+			yaml:    witnessYAML("", waypointYAML("function_return", "follow", `"\\result == 1"`, loc(10, -1))),
 			wantErr: "invalid 1-based location",
 		},
 		{
@@ -641,6 +641,24 @@ func TestParseWitnessUnsupported(t *testing.T) {
 	}
 	if w.Counts.FunctionReturn != 3 || w.Counts.Target != 1 {
 		t.Errorf("Counts = %+v, want all waypoints counted", w.Counts)
+	}
+}
+
+// The format allows to leave out the column. A function_return waypoint
+// without column is extracted with column 0; the instrumentation finds its
+// call.
+func TestParseWitnessFunctionReturnWithoutColumn(t *testing.T) {
+	yaml := witnessYAML("",
+		waypointYAML("function_return", "follow", `"\\result == 1"`, "file_name: p.c, line: 10"),
+		waypointYAML("target", "follow", "", loc(12, 3)),
+	)
+	w, err := ParseWitness(yaml, "p.c")
+	if err != nil {
+		t.Fatalf("ParseWitness: %v", err)
+	}
+	want := []InjectionPoint{{Loc: Location{Line: 10, Column: 0}, Value: "1"}}
+	if w.Unsupported != "" || !reflect.DeepEqual(w.Points, want) {
+		t.Errorf("Points = %v, Unsupported = %q; want %v, \"\"", w.Points, w.Unsupported, want)
 	}
 }
 

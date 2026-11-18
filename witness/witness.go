@@ -169,9 +169,9 @@ var (
 //
 // A function_return waypoint with an invalid location is an error. One with a
 // constraint value outside the literal allowlist is not extracted and is
-// reported in Unsupported. Assumption, branching and target waypoints
-// that cannot be interpreted are skipped silently; they are still reflected
-// in Counts.
+// reported in Unsupported. One without column is extracted with column 0.
+// Assumption, branching and target waypoints that cannot be interpreted are
+// skipped silently; they are still reflected in Counts.
 //
 // A document without a violation_sequence entry is not an error: the result
 // has ViolationSequences == 0 and the caller decides what that means.
@@ -338,7 +338,8 @@ func functionReturnPoint(w waypoint, wantBase string) (point InjectionPoint, ok 
 	if filepath.Base(w.Location.FileName) != wantBase {
 		return InjectionPoint{}, false, "", nil
 	}
-	if w.Location.Line <= 0 || w.Location.Column <= 0 {
+	// The format allows to leave out the column (column 0).
+	if w.Location.Line <= 0 || w.Location.Column < 0 {
 		return InjectionPoint{}, false, "", fmt.Errorf(
 			"witness waypoint at %q has invalid 1-based location (line=%d, column=%d)",
 			w.Location.FileName, w.Location.Line, w.Location.Column)

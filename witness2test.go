@@ -239,6 +239,9 @@ func turnWitnessToTest(witnessPath, programPath, tempDir, outputDir string, opti
 	if err != nil {
 		return execution.Verdict{}, "", fmt.Errorf("instrument: %w", err)
 	}
+	if instrumented.Unsupported != "" {
+		return stopEarly(execution.WitnessUnsupported, instrumented.Unsupported)
+	}
 	notes = append(notes, limitNotes(instrumented.Notes)...)
 
 	// A program without nondeterministic calls needs no input values, so it

@@ -112,6 +112,7 @@ func TestInstrumentWitnessUnmatchedFunctionReturnIsNoted(t *testing.T) {
 		{"line without call", witness.Location{Line: 3, Column: 10}, "function_return at 3:10 (1 value) not matched: no __VERIFIER_nondet_X() call ends at the location"},
 		{"line beyond the program", witness.Location{Line: 99, Column: 5}, "function_return at 99:5 (1 value) not matched: no __VERIFIER_nondet_X() call ends at the location"},
 		{"column of the opening parenthesis", witness.Location{Line: 2, Column: 32}, "function_return at 2:32 (1 value) not matched: no __VERIFIER_nondet_X() call ends at the location"},
+		{"line without call and without column", witness.Location{Line: 3}, "function_return at line 3 (1 value) not matched: no __VERIFIER_nondet_X() call on the line"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -127,6 +128,30 @@ func TestInstrumentWitnessUnmatchedFunctionReturnIsNoted(t *testing.T) {
 				t.Errorf("notes = %q, want %q", res.Notes, tt.note)
 			}
 		})
+	}
+}
+
+// A function_return waypoint without column belongs to the only nondet call
+// on its line. With several calls on the line, its value cannot be assigned.
+func TestInstrumentWitnessFunctionReturnWithoutColumn(t *testing.T) {
+	src := "int main() {\n  int x = __VERIFIER_nondet_int();\n  int y = __VERIFIER_nondet_int() + __VERIFIER_nondet_int();\n  return x + y;\n}\n"
+	w := &witness.Witness{Points: []witness.InjectionPoint{{Loc: witness.Location{Line: 2}, Value: "7"}}}
+	res, err := InstrumentWitness(src, w, Options{})
+	if err != nil {
+		t.Fatalf("InstrumentWitness: %v", err)
+	}
+	if res.InjectedSites != 1 || res.Unsupported != "" || !strings.Contains(res.Source, "__VERIFIER_nondet_value_injection_2_33()") {
+		t.Errorf("InjectedSites = %d, Unsupported = %q, source:\n%s", res.InjectedSites, res.Unsupported, res.Source)
+	}
+
+	w = &witness.Witness{Points: []witness.InjectionPoint{{Loc: witness.Location{Line: 2, Column: 33}, Value: "7"}, {Loc: witness.Location{Line: 3}, Value: "8"}}}
+	res, err = InstrumentWitness(src, w, Options{})
+	if err != nil {
+		t.Fatalf("InstrumentWitness: %v", err)
+	}
+	want := "function_return waypoint at line 3 has no column, and the line has 2 __VERIFIER_nondet_X() calls"
+	if res.Unsupported != want || res.InjectedSites != 0 || res.Source != "" {
+		t.Errorf("Unsupported = %q, InjectedSites = %d, Source = %q; want %q, nothing instrumented", res.Unsupported, res.InjectedSites, res.Source, want)
 	}
 }
 

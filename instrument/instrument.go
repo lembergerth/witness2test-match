@@ -184,6 +184,10 @@ type Result struct {
 	// Notes explain, in deterministic order, which assumption and branching
 	// waypoints of the witness were not turned into input values and why.
 	Notes []string
+	// Unsupported describes why the values of the witness cannot be assigned
+	// to calls, "" if they can: a function_return waypoint without column on
+	// a line with several nondet calls. Nothing is instrumented then.
+	Unsupported string
 }
 
 // lineDirectiveRegex matches linemarkers ("# 5 "foo.h" 1") and #line
@@ -202,7 +206,8 @@ const lineDirective = "#line 1\n"
 // following sources, in this priority:
 //
 //  1. function_return waypoints located at the closing parenthesis of the
-//     call. Such a waypoint on any other call provides no input value.
+//     call, or without column on the line of the only nondet call of that
+//     line. Such a waypoint on any other call provides no input value.
 //  2. assumption waypoints "x == <literal>" located directly after a plain
 //     assignment "x = __VERIFIER_nondet_T();".
 //  3. branching waypoints of an if, loop, switch or conditional operator
@@ -224,7 +229,11 @@ func InstrumentWitness(source string, w *witness.Witness, opts Options) (Result,
 	program := neutraliseLineDirectives(source)
 	sites := CollectNondetCalls(program)
 
-	matched, unmatchedNotes := splitFunctionReturns(witness.GroupByLocation(w.Points), sites)
+	points, unsupported := resolveMissingColumns(w.Points, sites)
+	if unsupported != "" {
+		return Result{NondetSites: len(sites), Unsupported: unsupported}, nil
+	}
+	matched, unmatchedNotes := splitFunctionReturns(witness.GroupByLocation(points), sites)
 	witnessed, err := matchWitnessToSites(matched, sites)
 	if err != nil {
 		return Result{}, err
@@ -275,6 +284,11 @@ func splitFunctionReturns(injections map[witness.Location][]string, sites []Nond
 		plural := "s"
 		if len(injections[loc]) == 1 {
 			plural = ""
+		}
+		if loc.Column == 0 {
+			notes = append(notes, fmt.Sprintf("function_return at line %d (%d value%s) not matched: no __VERIFIER_nondet_X() call on the line",
+				loc.Line, len(injections[loc]), plural))
+			continue
 		}
 		notes = append(notes, fmt.Sprintf("function_return at %d:%d (%d value%s) not matched: no __VERIFIER_nondet_X() call ends at the location",
 			loc.Line, loc.Column, len(injections[loc]), plural))
